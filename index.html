@@ -29,7 +29,7 @@
             align-items: center;
             flex-wrap: wrap;
             justify-content: center;
-            max-width: 580px;
+            max-width: 600px;
         }
         .control-group {
             display: flex;
@@ -104,7 +104,7 @@
 <body>
 
     <h1>Paint Musical & TR-909 PRO</h1>
-    <p>¡Dibuja melodías y percusiones! Lee de izquierda a derecha.</p>
+    <p>¡Dibujá y percute fluidamente en pentatónicas!</p>
 
     <div id="controls">
         <div class="control-group">
@@ -116,10 +116,10 @@
         </div>
 
         <div class="control-group">
-            <button class="tool-btn" data-tool="kick" title="Kick (Círculo)">⭕</button>
-            <button class="tool-btn" data-tool="hihat" title="Hi-Hat (Triángulo)">🔺</button>
-            <button class="tool-btn" data-tool="snare" title="Snare Seco (Cuadrado)">⬜</button>
-            <button class="tool-btn" data-tool="clap" title="Clap House (Diamante)">👏</button>
+            <button class="tool-btn" data-tool="kick" title="Kick">⭕</button>
+            <button class="tool-btn" data-tool="hihat" title="Hi-Hat">🔺</button>
+            <button class="tool-btn" data-tool="snare" title="Snare">⬜</button>
+            <button class="tool-btn" data-tool="clap" title="Clap">👏</button>
             <button class="tool-btn" data-tool="goma" title="Borrar">❌</button>
         </div>
 
@@ -135,8 +135,8 @@
         <div class="control-group">
             <label>Escala:</label>
             <select id="scaleSelect">
-                <option value="menor" selected>Menor</option>
-                <option value="mayor">Mayor</option>
+                <option value="pentatonic_menor" selected>Penta Menor</option>
+                <option value="pentatonic_mayor">Penta Mayor</option>
             </select>
         </div>
 
@@ -182,6 +182,7 @@
         let showGrid = false;
         let scanX = 0;
         let lastStep = -1;
+        let lastColIndex = -1;
         
         let audioCtx = null;
         let masterGain = null;
@@ -192,7 +193,7 @@
         let drumSequence = Array(STEPS).fill(null).map(() => ([]));
         let history = [];
 
-        // Dibuja la grilla
+        // Grilla visual
         gridCtx.strokeStyle = 'rgba(200, 200, 220, 0.7)';
         gridCtx.lineWidth = 1;
         gridCtx.setLineDash([4, 4]);
@@ -249,9 +250,10 @@
             aerosol: { type: 'square',   audioRed: 50 }
         };
 
+        // Escalas Pentatónicas (11 notas desde C3)
         const scales = {
-            mayor: [130.81, 146.83, 164.81, 196.00, 220.00, 261.63, 293.66, 329.63, 392.00, 440.00, 523.25],
-            menor: [130.81, 155.56, 174.61, 196.00, 233.08, 261.63, 311.13, 349.23, 392.00, 466.16, 523.25]
+            pentatonic_mayor: [130.81, 146.83, 164.81, 196.00, 220.00, 261.63, 293.66, 329.63, 392.00, 440.00, 523.25],
+            pentatonic_menor: [130.81, 155.56, 174.61, 196.00, 233.08, 261.63, 311.13, 349.23, 392.00, 466.16, 523.25]
         };
 
         function quantizePos(x, y) {
@@ -473,7 +475,10 @@
             playBtn.textContent = isPlaying ? '⏸ Pausa' : '▶ Play';
             scanLine.style.display = isPlaying ? 'block' : 'none';
 
-            if (!isPlaying) stopAllActiveTones();
+            if (!isPlaying) {
+                stopAllActiveTones();
+                lastColIndex = -1;
+            }
         });
 
         function animate() {
@@ -485,13 +490,18 @@
             if (scanX > canvas.width) {
                 scanX = 0;
                 lastStep = -1; 
+                lastColIndex = -1;
             }
 
             const percent = (scanX / canvas.width) * 100;
             scanLine.style.left = percent + '%';
 
-            // Como agregamos scaleSelect, esta línea ya no falla
-            checkColumnAndPlay(scanX);
+            // Optimización clave: Lee el canvas de audio solo cuando cambia de columna exacta para evitar lag
+            const colIndex = Math.floor(scanX);
+            if (colIndex !== lastColIndex && colIndex < audioCanvas.width) {
+                lastColIndex = colIndex;
+                checkColumnAndPlay(colIndex);
+            }
 
             const currentStep = Math.floor(scanX / (canvas.width / STEPS));
             if (currentStep !== lastStep && currentStep >= 0 && currentStep < STEPS) {
@@ -502,13 +512,10 @@
             }
         }
 
-        function checkColumnAndPlay(x) {
-            const colIndex = Math.floor(x);
-            if (colIndex >= audioCanvas.width) return;
-
+        function checkColumnAndPlay(colIndex) {
             const imgData = audioCtx2D.getImageData(colIndex, 0, 1, audioCanvas.height);
             const data = imgData.data;
-            const scaleType = document.getElementById('scaleSelect').value || 'menor';
+            const scaleType = document.getElementById('scaleSelect').value || 'pentatonic_menor';
             const currentScale = scales[scaleType];
             const continuousTargets = { lapiz: new Map(), crayon: new Map(), fibra: new Map(), pincel: new Map() };
             const currentOneShots = new Map(); 
