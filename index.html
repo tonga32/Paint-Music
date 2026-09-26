@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Paint Musical - Legato & Compresor</title>
+    <title>Paint Musical - Drums Pro & Glissando</title>
     <style>
         body {
             margin: 0;
@@ -99,7 +99,7 @@
 <body>
 
     <h1>Paint Musical & TR-909 PRO</h1>
-    <p>Volumen anclado al grosor original del trazo.</p>
+    <p>Drums puros sin notas fantasmas, Glissando y Limitador.</p>
 
     <div id="controls">
         <div class="control-group">
@@ -168,11 +168,12 @@
         let isPlaying = false;
         let scanX = 0;
         
-        // Variables de Audio
         let audioCtx = null;
         let masterGain = null;
         let masterCompressor = null;
-        let activeTones = {}; 
+        
+        let continuousTones = {}; 
+        let oneShotTones = {};
         
         let history = [];
 
@@ -259,8 +260,6 @@
             }
 
             const toolInfo = toolAudioMap[currentTool];
-            
-            // MAGIA ACÁ: Guardamos el tamaño de la herramienta en el canal VERDE del píxel
             const audioColorStr = `rgb(${toolInfo.audioRed}, ${size}, 0)`;
 
             ctx.lineWidth = size; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
@@ -299,8 +298,6 @@
             const rawSize = parseInt(document.getElementById('sizeRange').value);
             const size = Math.max(rawSize * 1.5, 12);
             const toolInfo = toolAudioMap[currentTool];
-            
-            // Guardamos el tamaño en el canal verde
             const audioColorStr = `rgb(${toolInfo.audioRed}, ${rawSize}, 0)`;
 
             ctx.save(); audioCtx2D.save();
@@ -348,12 +345,13 @@
         });
 
         function stopAllActiveTones() {
-            for (const key in activeTones) {
-                if (activeTones[key].type === 'continuous') {
-                    stopContinuousTone(activeTones[key]);
+            for (const tool in continuousTones) {
+                for (const tone of continuousTones[tool]) {
+                    stopContinuousTone(tone);
                 }
             }
-            activeTones = {};
+            continuousTones = {};
+            oneShotTones = {};
         }
 
         const playBtn = document.getElementById('playBtn');
@@ -411,65 +409,114 @@
             const scaleType = document.getElementById('scaleSelect').value;
             const currentScale = scales[scaleType];
             
-            // Usamos un Map para guardar la herramienta/nota y su INTENSIDAD real leída del canvas
-            const currentActiveFrame = new Map();
+            const continuousTargets = { lapiz: new Map(), crayon: new Map(), fibra: new Map(), pincel: new Map() };
+            const currentOneShots = new Map();
 
             for (let y = 0; y < audioCanvas.height; y += 8) {
                 const r = data[(y * 4)];
-                const g = data[(y * 4) + 1]; // Recuperamos el grosor original de la nota
+                const g = data[(y * 4) + 1]; 
                 const alpha = data[(y * 4) + 3];
 
-                if (alpha > 20 && (r >= 10 && r <= 80)) {
-                    let tool = 'lapiz';
-                    if (r === 20) tool = 'crayon';
-                    else if (r === 30) tool = 'fibra';
-                    else if (r === 40) tool = 'pincel';
-                    else if (r === 50) tool = 'aerosol';
-                    else if (r === 60) tool = 'kick';
-                    else if (r === 70) tool = 'hihat';
-                    else if (r === 80) tool = 'snare';
+                // SOLUCIÓN ANTI-ALIASING: Filtramos pixeles difuminados y redondeamos los colores 
+                // para evitar lecturas "fantasma" que generaban melodías accidentales.
+                if (alpha > 150) {
+                    const rSnap = Math.round(r / 10) * 10; // Fuerza valores a 10, 20, 30, etc.
 
-                    const noteIndex = Math.floor(((audioCanvas.height - y) / audioCanvas.height) * currentScale.length);
-                    const key = `${tool}_${noteIndex}`;
-                    
-                    // Calculamos la intensidad basada en el tamaño que TENÍA al dibujarse
-                    const drawnSize = g > 0 ? g : 4; 
-                    const intensity = Math.min(drawnSize / 8, 1.8);
+                    if (rSnap >= 10 && rSnap <= 80) {
+                        let tool = 'lapiz';
+                        if (rSnap === 20) tool = 'crayon';
+                        else if (rSnap === 30) tool = 'fibra';
+                        else if (rSnap === 40) tool = 'pincel';
+                        else if (rSnap === 50) tool = 'aerosol';
+                        else if (rSnap === 60) tool = 'kick';
+                        else if (rSnap === 70) tool = 'hihat';
+                        else if (rSnap === 80) tool = 'snare';
 
-                    if (!currentActiveFrame.has(key)) {
-                        currentActiveFrame.set(key, intensity);
-                    } else {
-                        currentActiveFrame.set(key, Math.max(currentActiveFrame.get(key), intensity));
+                        const noteIndex = Math.floor(((audioCanvas.height - y) / audioCanvas.height) * currentScale.length);
+                        const drawnSize = g > 0 ? g : 4; 
+                        const intensity = Math.min(drawnSize / 8, 1.8);
+
+                        if (['lapiz', 'crayon', 'fibra', 'pincel'].includes(tool)) {
+                            if (!continuousTargets[tool].has(noteIndex)) {
+                                continuousTargets[tool].set(noteIndex, intensity);
+                            } else {
+                                continuousTargets[tool].set(noteIndex, Math.max(continuousTargets[tool].get(noteIndex), intensity));
+                            }
+                        } else {
+                            // Para percusión usamos el índice de la nota solo para agrupar por píxel, 
+                            // pero la síntesis de sonido será independiente de la altura.
+                            const key = `${tool}_${noteIndex}`;
+                            if (!currentOneShots.has(key)) {
+                                currentOneShots.set(key, intensity);
+                            } else {
+                                currentOneShots.set(key, Math.max(currentOneShots.get(key), intensity));
+                            }
+                        }
                     }
                 }
             }
 
-            // Disparar las notas con el volumen correcto
-            for (const [key, intensity] of currentActiveFrame.entries()) {
-                if (!activeTones[key]) {
+            const now = audioCtx.currentTime;
+
+            // --- SISTEMA DE GLISSANDO (PORTAMENTO) PARA MELODÍAS ---
+            for (const tool in continuousTargets) {
+                let targets = Array.from(continuousTargets[tool].entries()).map(([noteIdx, intensity]) => {
+                    return { freq: currentScale[Math.min(noteIdx, currentScale.length - 1)], intensity };
+                });
+                targets.sort((a, b) => a.freq - b.freq);
+
+                if (!continuousTones[tool]) continuousTones[tool] = [];
+                let active = continuousTones[tool];
+                active.sort((a, b) => a.freq - b.freq);
+
+                let nextActive = [];
+                let maxLen = Math.max(targets.length, active.length);
+
+                for (let i = 0; i < maxLen; i++) {
+                    if (i < targets.length && i < active.length) {
+                        let oscObj = active[i];
+                        let target = targets[i];
+                        
+                        oscObj.osc.frequency.cancelScheduledValues(now);
+                        oscObj.osc.frequency.setTargetAtTime(target.freq, now, 0.05);
+                        
+                        oscObj.gainNode.gain.cancelScheduledValues(now);
+                        const vol = 0.2 * target.intensity;
+                        oscObj.gainNode.gain.setTargetAtTime(vol, now, 0.03);
+                        
+                        oscObj.freq = target.freq;
+                        nextActive.push(oscObj);
+                    } else if (i < targets.length) {
+                        let target = targets[i];
+                        let oscObj = startContinuousTone(target.freq, target.intensity, tool);
+                        oscObj.freq = target.freq;
+                        nextActive.push(oscObj);
+                    } else if (i < active.length) {
+                        stopContinuousTone(active[i]);
+                    }
+                }
+                continuousTones[tool] = nextActive;
+            }
+
+            // --- SISTEMA DE ONE-SHOTS (BATERÍA) LIMPIOS ---
+            for (const [key, intensity] of currentOneShots.entries()) {
+                if (!oneShotTones[key]) {
                     const [toolStr, noteIdxStr] = key.split('_');
                     const noteIndex = parseInt(noteIdxStr);
                     const freq = currentScale[Math.min(noteIndex, currentScale.length - 1)];
 
                     if (toolStr === 'kick' || toolStr === 'hihat' || toolStr === 'snare') {
-                        playPercussion(toolStr, intensity);
-                        activeTones[key] = { type: 'oneshot' }; 
+                        playPercussion(toolStr, intensity); // Suena igual sin importar "freq"
                     } else if (toolStr === 'aerosol') {
                         playShortTone(freq, intensity, toolStr);
-                        activeTones[key] = { type: 'oneshot' }; 
-                    } else {
-                        const nodes = startContinuousTone(freq, intensity, toolStr);
-                        activeTones[key] = { type: 'continuous', osc: nodes.osc, gainNode: nodes.gainNode };
                     }
+                    oneShotTones[key] = true; 
                 }
             }
 
-            for (const key in activeTones) {
-                if (!currentActiveFrame.has(key)) {
-                    if (activeTones[key].type === 'continuous') {
-                        stopContinuousTone(activeTones[key]);
-                    }
-                    delete activeTones[key]; 
+            for (const key in oneShotTones) {
+                if (!currentOneShots.has(key)) {
+                    delete oneShotTones[key]; 
                 }
             }
         }
@@ -488,7 +535,7 @@
             osc.connect(gainNode);
             gainNode.connect(masterGain); 
             osc.start();
-            return { osc, gainNode };
+            return { osc, gainNode, freq };
         }
 
         function stopContinuousTone(toneObj) {
@@ -523,16 +570,21 @@
                 const volMultiplier = Math.min(intensity, 1.5);
 
                 if (type === 'kick') {
+                    // Bombo mejorado: Senoidal con barrido rápido de frecuencia (Física clásica de Drum Machine)
                     const osc = audioCtx.createOscillator();
                     const gain = audioCtx.createGain();
-                    osc.frequency.setValueAtTime(130, now);
-                    osc.frequency.exponentialRampToValueAtTime(40, now + 0.12);
-                    gain.gain.setValueAtTime(1.0 * volMultiplier, now);
-                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(150, now);
+                    osc.frequency.exponentialRampToValueAtTime(40, now + 0.08); // Caída rápida
+                    
+                    gain.gain.setValueAtTime(1.5 * volMultiplier, now); // Ataque fuerte
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+                    
                     osc.connect(gain);
                     gain.connect(masterGain);
                     osc.start(now);
-                    osc.stop(now + 0.3);
+                    osc.stop(now + 0.45);
+
                 } else if (type === 'hihat') {
                     const bufferSize = audioCtx.sampleRate * 0.05;
                     const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
@@ -543,32 +595,37 @@
                     const filter = audioCtx.createBiquadFilter();
                     filter.type = 'highpass'; filter.frequency.value = 7000;
                     const gain = audioCtx.createGain();
-                    gain.gain.setValueAtTime(0.6 * volMultiplier, now);
-                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+                    gain.gain.setValueAtTime(0.8 * volMultiplier, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
                     noise.connect(filter); filter.connect(gain); gain.connect(masterGain);
                     noise.start(now);
+
                 } else if (type === 'snare') {
+                    // Snare mejorado: Cuerpo tonal (triangle) más corto + Ruido blanco filtrado 
+                    
+                    // Cuerpo
                     const osc = audioCtx.createOscillator();
                     const oscGain = audioCtx.createGain();
                     osc.type = 'triangle';
-                    osc.frequency.setValueAtTime(180, now);
-                    osc.frequency.exponentialRampToValueAtTime(80, now + 0.1);
-                    oscGain.gain.setValueAtTime(0.6 * volMultiplier, now);
-                    oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+                    osc.frequency.setValueAtTime(250, now);
+                    osc.frequency.exponentialRampToValueAtTime(120, now + 0.1);
+                    oscGain.gain.setValueAtTime(0.7 * volMultiplier, now);
+                    oscGain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
                     osc.connect(oscGain); oscGain.connect(masterGain);
-                    osc.start(now); osc.stop(now + 0.15);
+                    osc.start(now); osc.stop(now + 0.25);
 
-                    const bufferSize = audioCtx.sampleRate * 0.12;
+                    // Ruido
+                    const bufferSize = audioCtx.sampleRate * 0.25;
                     const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
                     const output = buffer.getChannelData(0);
                     for (let i = 0; i < bufferSize; i++) output[i] = Math.random() * 2 - 1;
                     const noise = audioCtx.createBufferSource();
                     noise.buffer = buffer;
                     const filter = audioCtx.createBiquadFilter();
-                    filter.type = 'bandpass'; filter.frequency.value = 1500;
+                    filter.type = 'bandpass'; filter.frequency.value = 2000;
                     const noiseGain = audioCtx.createGain();
-                    noiseGain.gain.setValueAtTime(0.5 * volMultiplier, now);
-                    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+                    noiseGain.gain.setValueAtTime(0.8 * volMultiplier, now);
+                    noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
                     noise.connect(filter); filter.connect(noiseGain); noiseGain.connect(masterGain);
                     noise.start(now);
                 }
