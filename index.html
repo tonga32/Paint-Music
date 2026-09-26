@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Paint Musical - Drums Pro & Continuous Lines</title>
+    <title>Paint Musical - Drums Pro & Grid</title>
     <style>
         body {
             margin: 0;
@@ -29,7 +29,7 @@
             align-items: center;
             flex-wrap: wrap;
             justify-content: center;
-            max-width: 520px;
+            max-width: 540px;
         }
         .control-group {
             display: flex;
@@ -99,7 +99,7 @@
 <body>
 
     <h1>Paint Musical & TR-909 PRO</h1>
-    <p>Lectura de percusión ultra-limpia sin rebotes.</p>
+    <p>Con grilla métrica de tiempo opcional.</p>
 
     <div id="controls">
         <div class="control-group">
@@ -144,6 +144,7 @@
         </div>
 
         <div class="control-group">
+            <button id="gridBtn">Grilla: OFF</button>
             <button id="playBtn" style="background: #00b894;">▶ Play</button>
             <button id="undoBtn" style="background: #e17055;">↶</button>
             <button id="clearBtn" style="background: #d63031;">🗑</button>
@@ -166,6 +167,7 @@
         let isDrawing = false;
         let currentTool = 'lapiz';
         let isPlaying = false;
+        let showGrid = false;
         let scanX = 0;
         
         let audioCtx = null;
@@ -202,10 +204,68 @@
             menor: [130.81, 155.56, 174.61, 196.00, 233.08, 261.63, 311.13, 349.23, 392.00, 466.16, 523.25]
         };
 
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        function drawBackgroundAndGrid() {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if (showGrid) {
+                ctx.save();
+                ctx.strokeStyle = '#e0e0e8';
+                ctx.lineWidth = 1;
+
+                // 16 pasos verticales (grilla rítmica)
+                const steps = 16;
+                for (let i = 1; i < steps; i++) {
+                    const x = (canvas.width / steps) * i;
+                    ctx.beginPath();
+                    ctx.moveTo(x, 0);
+                    ctx.lineTo(x, canvas.height);
+                    ctx.stroke();
+                }
+
+                // Líneas horizontales de referencia de notas
+                const notesCount = 11;
+                for (let i = 1; i < notesCount; i++) {
+                    const y = (canvas.height / notesCount) * i;
+                    ctx.beginPath();
+                    ctx.moveTo(0, y);
+                    ctx.lineTo(canvas.width, y);
+                    ctx.stroke();
+                }
+                ctx.restore();
+            }
+        }
+
+        drawBackgroundAndGrid();
         audioCtx2D.clearRect(0, 0, audioCanvas.width, audioCanvas.height);
         saveState();
+
+        document.getElementById('gridBtn').addEventListener('click', (e) => {
+            showGrid = !showGrid;
+            e.target.classList.toggle('active', showGrid);
+            e.target.textContent = showGrid ? 'Grilla: ON' : 'Grilla: OFF';
+            
+            // Redibujamos el estado actual manteniendo el contenido dibujado por el usuario
+            redrawCanvasFromHistory();
+        });
+
+        function redrawCanvasFromHistory() {
+            if (history.length > 0) {
+                const currentState = history[history.length - 1];
+                
+                // Fondo blanco + grilla opcional
+                drawBackgroundAndGrid();
+                
+                // Creamos un canvas temporal para superponer los trazos del usuario encima de la grilla nueva
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = canvas.width;
+                tempCanvas.height = canvas.height;
+                const tempCtx = tempCanvas.getContext('2d');
+                tempCtx.putImageData(currentState.main, 0, 0);
+                
+                ctx.drawImage(tempCanvas, 0, 0);
+            }
+        }
 
         document.querySelectorAll('.tool-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
@@ -338,15 +398,17 @@
         document.getElementById('undoBtn').addEventListener('click', () => {
             if (history.length > 1) {
                 history.pop();
+                redrawCanvasFromHistory();
+                
+                // Actualizamos también el canvas de audio con el estado anterior
                 const prevState = history[history.length - 1];
-                ctx.putImageData(prevState.main, 0, 0);
                 audioCtx2D.putImageData(prevState.audio, 0, 0);
             }
         });
 
         document.getElementById('clearBtn').addEventListener('click', () => {
             saveState();
-            ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            drawBackgroundAndGrid();
             audioCtx2D.clearRect(0, 0, audioCanvas.width, audioCanvas.height);
         });
 
@@ -509,12 +571,10 @@
                 continuousTones[tool] = nextActive;
             }
 
-            // --- BATERÍA (COOLDOWN AUMENTADO Y PROTECCIÓN CONTRA SOLAPAMIENTO) ---
             for (const drum of ['kick', 'hihat', 'snare']) {
                 if (drumsInColumn[drum] > 0) {
                     if (drumCooldown[drum] === 0) {
                         playPercussion(drum, drumsInColumn[drum]);
-                        // Aumentamos el cooldown a 30 frames para evitar que lea el mismo punto dos veces seguidas
                         drumCooldown[drum] = 30; 
                     }
                 }
@@ -581,12 +641,11 @@
                     const osc = audioCtx.createOscillator();
                     const gain = audioCtx.createGain();
                     osc.type = 'sine';
-                    // Pitch sweep bien limpio para evitar clics extraños
                     osc.frequency.setValueAtTime(130, now);
                     osc.frequency.exponentialRampToValueAtTime(45, now + 0.06); 
                     
                     gain.gain.setValueAtTime(1.8 * volMultiplier, now); 
-                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25); // Duración justa y limpia
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
                     
                     osc.connect(gain); gain.connect(masterGain);
                     osc.start(now); osc.stop(now + 0.3);
