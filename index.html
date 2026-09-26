@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Paint Musical - Drums Pro & Grid</title>
+    <title>Paint Musical - Drums Pro & Grid Fix</title>
     <style>
         body {
             margin: 0;
@@ -99,7 +99,7 @@
 <body>
 
     <h1>Paint Musical & TR-909 PRO</h1>
-    <p>Dibujo libre melódico + Grilla y cuantizador rítmico para percusiones.</p>
+    <p>Dibujo libre melódico + Grilla rítmica cuantizada instantánea.</p>
 
     <div id="controls">
         <div class="control-group">
@@ -212,7 +212,7 @@
 
             if (showGrid) {
                 ctx.save();
-                ctx.strokeStyle = '#2d2d3a'; // Líneas negras divisorias visibles
+                ctx.strokeStyle = '#2d2d3a'; // Líneas negras visibles
                 ctx.lineWidth = 1;
                 ctx.setLineDash([3, 3]);
 
@@ -238,7 +238,7 @@
             }
         }
 
-        // Cuantización exclusiva para percusiones (Kicks, Hi-Hats, Snares)
+        // Función estricta de cuantización para percusiones a la grilla métrica
         function quantizeXForDrums(x) {
             if (!showGrid) return x;
             const stepWidth = canvas.width / STEPS;
@@ -246,6 +246,7 @@
             return stepIndex * stepWidth;
         }
 
+        // Inicialización
         drawBackgroundAndGrid();
         audioCtx2D.clearRect(0, 0, audioCanvas.width, audioCanvas.height);
         saveState();
@@ -255,21 +256,23 @@
             e.target.classList.toggle('active', showGrid);
             e.target.textContent = showGrid ? 'Grilla: ON' : 'Grilla: OFF';
             
-            // Redibujamos inmediatamente al presionar el botón
+            // Forzamos el redibujado instantáneo superponiendo los trazos guardados sobre el fondo actualizado
             redrawCanvasFromHistory();
         });
 
         function redrawCanvasFromHistory() {
+            // Dibujamos el fondo blanco y la grilla (ON u OFF según corresponda)
+            drawBackgroundAndGrid();
+
             if (history.length > 0) {
                 const currentState = history[history.length - 1];
-                drawBackgroundAndGrid();
-                
                 const tempCanvas = document.createElement('canvas');
                 tempCanvas.width = canvas.width;
                 tempCanvas.height = canvas.height;
                 const tempCtx = tempCanvas.getContext('2d');
                 tempCtx.putImageData(currentState.main, 0, 0);
                 
+                // Superponemos los trazos del usuario encima de la grilla
                 ctx.drawImage(tempCanvas, 0, 0);
             }
         }
@@ -300,8 +303,8 @@
             saveState();
             const pos = getPos(e);
             
-            // Si es percusión cuantizamos la posición X a la grilla; si es dibujo libre, va exacto al toque
             const isPercussion = ['kick', 'hihat', 'snare'].includes(currentTool);
+            // Cuantizamos automáticamente la percusión a la línea de la grilla más cercana
             const targetX = isPercussion ? quantizeXForDrums(pos.x) : pos.x;
 
             lastX = targetX; lastY = pos.y;
