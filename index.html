@@ -99,7 +99,7 @@
 <body>
 
     <h1>Paint Musical & TR-909 PRO</h1>
-    <p>Líneas continuas perfectas y percusión sólida (1 golpe = 1 sonido).</p>
+    <p>Lectura de percusión por micropuntos y líneas 100% sólidas.</p>
 
     <div id="controls">
         <div class="control-group">
@@ -175,8 +175,8 @@
         let continuousTones = {}; 
         let oneShotTones = {};
         
-        // Estado de batería para evitar doble disparos (1 golpe por figura)
-        let drumReadingState = { kick: false, hihat: false, snare: false };
+        // Cooldown para asegurar que el "puntito" de la batería no se dispare doble
+        let drumCooldown = { kick: 0, hihat: 0, snare: 0 };
         
         let history = [];
 
@@ -267,6 +267,9 @@
 
             ctx.lineWidth = size; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
             ctx.strokeStyle = color; ctx.fillStyle = color;
+            
+            // EL SECRETO PARA LAS LÍNEAS CONTINUAS: AudioCanvas SIEMPRE dibuja sólido (Alpha 1.0)
+            audioCtx2D.globalAlpha = 1.0;
             audioCtx2D.lineWidth = size; audioCtx2D.lineCap = 'round'; audioCtx2D.lineJoin = 'round';
             audioCtx2D.strokeStyle = audioColorStr; audioCtx2D.fillStyle = audioColorStr;
 
@@ -275,18 +278,21 @@
                     const offsetX = (Math.random() - 0.5) * size * 2.5;
                     const offsetY = (Math.random() - 0.5) * size * 2.5;
                     ctx.globalAlpha = 0.3; ctx.fillRect(pos.x + offsetX, pos.y + offsetY, 2, 2);
-                    audioCtx2D.globalAlpha = 0.3; audioCtx2D.fillRect(pos.x + offsetX, pos.y + offsetY, 2, 2);
+                    // El audio debe ser más sólido para que no se pierda
+                    audioCtx2D.globalAlpha = 0.6; audioCtx2D.fillRect(pos.x + offsetX, pos.y + offsetY, 2, 2);
                 }
                 ctx.globalAlpha = 1.0; audioCtx2D.globalAlpha = 1.0;
             } else if (currentTool === 'crayon') {
-                ctx.globalAlpha = 0.5; audioCtx2D.globalAlpha = 0.5;
-                drawLine(ctx, lastX, lastY, pos.x, pos.y); drawLine(audioCtx2D, lastX, lastY, pos.x, pos.y);
-                ctx.globalAlpha = 1.0; audioCtx2D.globalAlpha = 1.0;
+                ctx.globalAlpha = 0.5; // Visual transparente
+                drawLine(ctx, lastX, lastY, pos.x, pos.y); 
+                drawLine(audioCtx2D, lastX, lastY, pos.x, pos.y); // Audio Sólido
+                ctx.globalAlpha = 1.0;
             } else if (currentTool === 'pincel') {
-                ctx.globalAlpha = 0.3; audioCtx2D.globalAlpha = 0.3;
-                ctx.lineWidth = size * 1.8; audioCtx2D.lineWidth = size * 1.8;
-                drawLine(ctx, lastX, lastY, pos.x, pos.y); drawLine(audioCtx2D, lastX, lastY, pos.x, pos.y);
-                ctx.globalAlpha = 1.0; audioCtx2D.globalAlpha = 1.0;
+                ctx.globalAlpha = 0.3; ctx.lineWidth = size * 1.8;
+                drawLine(ctx, lastX, lastY, pos.x, pos.y); 
+                audioCtx2D.lineWidth = size * 1.8;
+                drawLine(audioCtx2D, lastX, lastY, pos.x, pos.y); // Audio Sólido
+                ctx.globalAlpha = 1.0; 
             } else if (currentTool === 'fibra') {
                 ctx.lineWidth = size * 1.2; audioCtx2D.lineWidth = size * 1.2;
                 drawLine(ctx, lastX, lastY, pos.x, pos.y); drawLine(audioCtx2D, lastX, lastY, pos.x, pos.y);
@@ -304,18 +310,21 @@
             const audioColorStr = `rgb(${toolInfo.audioRed}, ${rawSize}, 0)`;
 
             ctx.save(); audioCtx2D.save();
+            
+            // DIBUJO VISUAL (Para el ojo)
             if (currentTool === 'kick') {
                 ctx.fillStyle = '#ff4757'; ctx.beginPath(); ctx.arc(x, y, size, 0, Math.PI * 2); ctx.fill();
-                audioCtx2D.fillStyle = audioColorStr; audioCtx2D.beginPath(); audioCtx2D.arc(x, y, size, 0, Math.PI * 2); audioCtx2D.fill();
             } else if (currentTool === 'hihat') {
                 ctx.fillStyle = '#2ed573'; ctx.beginPath();
                 ctx.moveTo(x, y - size); ctx.lineTo(x - size, y + size); ctx.lineTo(x + size, y + size); ctx.closePath(); ctx.fill();
-                audioCtx2D.fillStyle = audioColorStr; audioCtx2D.beginPath();
-                audioCtx2D.moveTo(x, y - size); audioCtx2D.lineTo(x - size, y + size); audioCtx2D.lineTo(x + size, y + size); audioCtx2D.closePath(); audioCtx2D.fill();
             } else if (currentTool === 'snare') {
                 ctx.fillStyle = '#1e90ff'; ctx.fillRect(x - size, y - size, size * 2, size * 2);
-                audioCtx2D.fillStyle = audioColorStr; audioCtx2D.fillRect(x - size, y - size, size * 2, size * 2);
             }
+
+            // DIBUJO DE AUDIO OCULTO (¡La idea del puntito!)
+            audioCtx2D.fillStyle = audioColorStr;
+            audioCtx2D.fillRect(x - 1, y - 1, 2, 2); // Un micropunto exacto en el centro
+            
             ctx.restore(); audioCtx2D.restore();
         }
 
@@ -345,7 +354,6 @@
             saveState();
             ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
             audioCtx2D.clearRect(0, 0, audioCanvas.width, audioCanvas.height);
-            drumReadingState = { kick: false, hihat: false, snare: false };
         });
 
         function stopAllActiveTones() {
@@ -356,7 +364,7 @@
             }
             continuousTones = {};
             oneShotTones = {};
-            drumReadingState = { kick: false, hihat: false, snare: false };
+            drumCooldown = { kick: 0, hihat: 0, snare: 0 };
         }
 
         const playBtn = document.getElementById('playBtn');
@@ -394,6 +402,11 @@
             requestAnimationFrame(animate);
             if (!isPlaying) return;
 
+            // Restamos tiempo de cooldown de batería
+            for (const k in drumCooldown) {
+                if (drumCooldown[k] > 0) drumCooldown[k]--;
+            }
+
             const speed = parseFloat(document.getElementById('tempoSelect').value);
             scanX += speed;
             if (scanX > canvas.width) scanX = 0;
@@ -415,7 +428,7 @@
             const currentScale = scales[scaleType];
             
             const continuousTargets = { lapiz: new Map(), crayon: new Map(), fibra: new Map(), pincel: new Map() };
-            const currentOneShots = new Map(); // Solo para aerosol
+            const currentOneShots = new Map(); 
             
             let drumsInColumn = { kick: 0, hihat: 0, snare: 0 };
 
@@ -424,7 +437,6 @@
                 const g = data[(y * 4) + 1]; 
                 const alpha = data[(y * 4) + 3];
 
-                // Bajamos el umbral alpha a 15 para no perder los bordes difuminados de las líneas rápidas
                 if (alpha > 15) {
                     const rSnap = Math.round(r / 10) * 10; 
 
@@ -452,7 +464,6 @@
                             const key = `${tool}_${noteIndex}`;
                             if (!currentOneShots.has(key)) currentOneShots.set(key, intensity);
                         } else if (['kick', 'hihat', 'snare'].includes(tool)) {
-                            // Agrupamos la batería leída en esta columna, sin importar su altura Y
                             drumsInColumn[tool] = Math.max(drumsInColumn[tool], intensity);
                         }
                     }
@@ -461,7 +472,7 @@
 
             const now = audioCtx.currentTime;
 
-            // --- SISTEMA CONTINUO CON "TOLERANCIA" PARA LÍNEAS PERFECTAS ---
+            // --- LÍNEAS CONTINUAS ---
             for (const tool in continuousTargets) {
                 let targets = Array.from(continuousTargets[tool].entries()).map(([noteIdx, intensity]) => {
                     return { freq: currentScale[Math.min(noteIdx, currentScale.length - 1)], intensity };
@@ -480,7 +491,7 @@
                         let oscObj = active[i];
                         let target = targets[i];
                         
-                        oscObj.missingFrames = 0; // Se encontró, reseteamos las faltas
+                        oscObj.missingFrames = 0; 
                         oscObj.osc.frequency.setTargetAtTime(target.freq, now, 0.05);
                         
                         const vol = 0.2 * target.intensity;
@@ -494,34 +505,30 @@
                         oscObj.missingFrames = 0;
                         nextActive.push(oscObj);
                     } else if (i < active.length) {
-                        // GRACE PERIOD (Tolerancia): Si hay micro-cortes, mantiene el sonido unos frames
+                        // Tolerancia aumentada para que la línea no tartamudee
                         let oscObj = active[i];
                         oscObj.missingFrames = (oscObj.missingFrames || 0) + 1;
-                        if (oscObj.missingFrames > 8) { // Aprox 130ms de tolerancia antes de cortar
+                        if (oscObj.missingFrames > 12) { 
                             stopContinuousTone(oscObj);
                         } else {
-                            nextActive.push(oscObj); // Lo mantenemos vivo en memoria
+                            nextActive.push(oscObj); 
                         }
                     }
                 }
                 continuousTones[tool] = nextActive;
             }
 
-            // --- SISTEMA DE BATERÍA (ONE SHOT GARANTIZADO) ---
+            // --- BATERÍA (EL PUNTITO OCULTO) ---
             for (const drum of ['kick', 'hihat', 'snare']) {
                 if (drumsInColumn[drum] > 0) {
-                    if (!drumReadingState[drum]) {
-                        // Es la primera vez que el láser toca el borde izquierdo de la figura
+                    if (drumCooldown[drum] === 0) {
                         playPercussion(drum, drumsInColumn[drum]);
-                        drumReadingState[drum] = true; // Se bloquea hasta salir del dibujo
+                        drumCooldown[drum] = 20; // Bloquea el sonido durante 20 frames para evitar disparos dobles
                     }
-                } else {
-                    // El láser ya salió por la derecha del dibujo, liberamos el instrumento
-                    drumReadingState[drum] = false;
                 }
             }
 
-            // --- AEROSOL (Mantiene sistema viejo por alturas) ---
+            // --- AEROSOL ---
             for (const [key, intensity] of currentOneShots.entries()) {
                 if (!oneShotTones[key]) {
                     const [toolStr, noteIdxStr] = key.split('_');
@@ -637,4 +644,3 @@
     </script>
 </body>
 </html>
-
