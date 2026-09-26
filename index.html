@@ -84,6 +84,11 @@
             cursor: crosshair;
         }
 
+        #gridCanvas {
+            pointer-events: none;
+            display: none; /* Grilla oculta por defecto */
+        }
+
         #scanLine {
             position: absolute;
             top: 0;
@@ -99,7 +104,7 @@
 <body>
 
     <h1>Paint Musical & TR-909 PRO</h1>
-    <p>Dibujo libre melódico + Grilla y cuantizador automático de percusiones.</p>
+    <p>Dibuja melodías + Grilla perfecta y segura para percusiones.</p>
 
     <div id="controls">
         <div class="control-group">
@@ -115,7 +120,7 @@
             <button class="tool-btn" data-tool="hihat" title="Hi-Hat (Triángulo)">🔺</button>
             <button class="tool-btn" data-tool="snare" title="Snare Seco (Cuadrado)">⬜</button>
             <button class="tool-btn" data-tool="clap" title="Clap House (Diamante)">👏</button>
-            <button class="tool-btn" data-tool="goma" title="Goma de borrar">🧹</button>
+            <button class="tool-btn" data-tool="goma" title="Borrar (Borra dibujo y limpia percusiones)">❌</button>
         </div>
 
         <div class="control-group">
@@ -137,14 +142,6 @@
         </div>
 
         <div class="control-group">
-            <label>Escala:</label>
-            <select id="scaleSelect">
-                <option value="mayor">Mayor</option>
-                <option value="menor">Menor</option>
-            </select>
-        </div>
-
-        <div class="control-group">
             <button id="gridBtn">Grilla: OFF</button>
             <button id="playBtn" style="background: #00b894;">▶ Play</button>
             <button id="undoBtn" style="background: #e17055;">↶</button>
@@ -154,6 +151,7 @@
 
     <div class="canvas-container">
         <canvas id="canvas" width="500" height="500"></canvas>
+        <canvas id="gridCanvas" width="500" height="500"></canvas>
         <canvas id="audioCanvas" width="500" height="500" style="display:none;"></canvas>
         <div id="scanLine"></div>
     </div>
@@ -163,13 +161,19 @@
         const ctx = canvas.getContext('2d');
         const audioCanvas = document.getElementById('audioCanvas');
         const audioCtx2D = audioCanvas.getContext('2d');
+        const gridCanvas = document.getElementById('gridCanvas');
+        const gridCtx = gridCanvas.getContext('2d');
         const scanLine = document.getElementById('scanLine');
+
+        const STEPS = 16; 
+        const ROWS = 11;
 
         let isDrawing = false;
         let currentTool = 'lapiz';
         let isPlaying = false;
         let showGrid = false;
         let scanX = 0;
+        let lastStep = -1; // Rastrea en qué paso de la grilla estamos tocando
         
         let audioCtx = null;
         let masterGain = null;
@@ -178,15 +182,28 @@
         let continuousTones = {}; 
         let oneShotTones = {};
         
-        let drumCooldown = { kick: 0, hihat: 0, snare: 0, clap: 0 };
+        // El NUEVO corazón de las percusiones (independiente de los píxeles)
+        let drumSequence = Array(STEPS).fill(null).map(() => ([]));
         let history = [];
 
-        const STEPS = 16; 
+        // Dibuja la grilla una sola vez
+        gridCtx.strokeStyle = 'rgba(200, 200, 220, 0.7)';
+        gridCtx.lineWidth = 1;
+        gridCtx.setLineDash([4, 4]);
+        for (let i = 1; i < STEPS; i++) {
+            const x = (gridCanvas.width / STEPS) * i;
+            gridCtx.beginPath(); gridCtx.moveTo(x, 0); gridCtx.lineTo(x, gridCanvas.height); gridCtx.stroke();
+        }
+        for (let i = 1; i < ROWS; i++) {
+            const y = (gridCanvas.height / ROWS) * i;
+            gridCtx.beginPath(); gridCtx.moveTo(0, y); gridCtx.lineTo(gridCanvas.width, y); gridCtx.stroke();
+        }
 
         function saveState() {
             history.push({
                 main: ctx.getImageData(0, 0, canvas.width, canvas.height),
-                audio: audioCtx2D.getImageData(0, 0, audioCanvas.width, audioCanvas.height)
+                audio: audioCtx2D.getImageData(0, 0, audioCanvas.width, audioCanvas.height),
+                drums: JSON.parse(JSON.stringify(drumSequence)) // Guardamos clon profundo de las percusiones
             });
             if (history.length > 25) history.shift();
         }
@@ -196,11 +213,7 @@
             crayon:  { type: 'triangle', audioRed: 20 },
             fibra:   { type: 'sawtooth', audioRed: 30 },
             pincel:  { type: 'sine',     audioRed: 40 },
-            aerosol: { type: 'square',   audioRed: 50 },
-            kick:    { type: 'kick',     audioRed: 60 },
-            hihat:   { type: 'hihat',    audioRed: 70 },
-            snare:   { type: 'snare',    audioRed: 80 },
-            clap:    { type: 'clap',     audioRed: 90 }
+            aerosol: { type: 'square',   audioRed: 50 }
         };
 
         const scales = {
@@ -208,54 +221,23 @@
             menor: [130.81, 155.56, 174.61, 196.00, 233.08, 261.63, 311.13, 349.23, 392.00, 466.16, 523.25]
         };
 
-        function renderScene() {
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            if (history.length > 0) {
-                const currentState = history[history.length - 1];
-                const tempCanvas = document.createElement('canvas');
-                tempCanvas.width = canvas.width;
-                tempCanvas.height = canvas.height;
-                const tempCtx = tempCanvas.getContext('2d');
-                tempCtx.putImageData(currentState.main, 0, 0);
-                ctx.drawImage(tempCanvas, 0, 0);
-            }
-
-            if (showGrid) {
-                ctx.save();
-                ctx.strokeStyle = '#2d2d3a'; 
-                ctx.lineWidth = 1;
-                ctx.setLineDash([3, 3]);
-
-                for (let i = 1; i < STEPS; i++) {
-                    const x = (canvas.width / STEPS) * i;
-                    ctx.beginPath();
-                    ctx.moveTo(x, 0);
-                    ctx.lineTo(x, canvas.height);
-                    ctx.stroke();
-                }
-
-                const notesCount = 11;
-                for (let i = 1; i < notesCount; i++) {
-                    const y = (canvas.height / notesCount) * i;
-                    ctx.beginPath();
-                    ctx.moveTo(0, y);
-                    ctx.lineTo(canvas.width, y);
-                    ctx.stroke();
-                }
-                ctx.restore();
-            }
+        // Cuantiza en X y en Y para centrar perfecto en el casillero
+        function quantizePos(x, y) {
+            const cellW = canvas.width / STEPS;
+            const cellH = canvas.height / ROWS;
+            const col = Math.min(STEPS - 1, Math.max(0, Math.floor(x / cellW)));
+            const row = Math.min(ROWS - 1, Math.max(0, Math.floor(y / cellH)));
+            return { 
+                col, row, 
+                x: (col * cellW) + (cellW / 2), 
+                y: (row * cellH) + (cellH / 2),
+                rectX: col * cellW,
+                rectY: row * cellH,
+                cellW, cellH
+            };
         }
 
-        // Calcula el centro exacto del espacio entre líneas
-        function quantizeXForDrums(x) {
-            const stepWidth = canvas.width / STEPS;
-            const stepIndex = Math.floor(x / stepWidth);
-            const clampedIndex = Math.max(0, Math.min(stepIndex, STEPS - 1));
-            return (clampedIndex * stepWidth) + (stepWidth / 2);
-        }
-
+        // Setup Inicial
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         audioCtx2D.clearRect(0, 0, audioCanvas.width, audioCanvas.height);
@@ -265,7 +247,7 @@
             showGrid = !showGrid;
             e.target.classList.toggle('active', showGrid);
             e.target.textContent = showGrid ? 'Grilla: ON' : 'Grilla: OFF';
-            renderScene();
+            gridCanvas.style.display = showGrid ? 'block' : 'none';
         });
 
         document.querySelectorAll('.tool-btn').forEach(btn => {
@@ -292,16 +274,21 @@
             e.preventDefault();
             const pos = getPos(e);
             const isPercussion = ['kick', 'hihat', 'snare', 'clap'].includes(currentTool);
-            const targetX = isPercussion ? quantizeXForDrums(pos.x) : pos.x;
-
-            saveState();
+            
+            saveState(); // Guardamos para poder Deshacer luego
             isDrawing = true;
-            lastX = targetX; 
+            lastX = pos.x; 
             lastY = pos.y;
             
             if (isPercussion) {
-                drawShape(targetX, pos.y);
-                renderScene();
+                const q = quantizePos(pos.x, pos.y);
+                // Si no hay un tambor del mismo tipo en este mismo cuadrito exacto, lo agrega
+                if (!drumSequence[q.col].some(d => d.row === q.row && d.tool === currentTool)) {
+                    drumSequence[q.col].push({ tool: currentTool, row: q.row });
+                    drawShape(q.x, q.y, currentTool);
+                }
+            } else if (currentTool === 'goma') {
+                draw(e); // Activa la goma inmediatamente al tocar
             }
         }
 
@@ -309,20 +296,42 @@
             if (!isDrawing) return;
             e.preventDefault();
             const pos = getPos(e);
-            if (['kick', 'hihat', 'snare', 'clap'].includes(currentTool)) return;
+            if (['kick', 'hihat', 'snare', 'clap'].includes(currentTool)) return; // No se puede arrastrar percusiones
 
             const color = document.getElementById('colorPicker').value;
             const size = parseInt(document.getElementById('sizeRange').value);
 
             if (currentTool === 'goma') {
+                // 1. Borrar dibujos continuos (Borra dibujando de blanco, o haciendo transparente el audio)
                 ctx.save(); audioCtx2D.save();
                 ctx.beginPath(); audioCtx2D.beginPath();
                 ctx.arc(pos.x, pos.y, size * 1.5, 0, Math.PI * 2);
-                ctx.fillStyle = '#ffffff'; ctx.fill();
-                audioCtx2D.clearRect(pos.x - size*1.5, pos.y - size*1.5, size*3, size*3);
+                
+                ctx.fillStyle = '#ffffff'; 
+                ctx.fill(); 
+                
+                audioCtx2D.globalCompositeOperation = 'destination-out';
+                audioCtx2D.fillStyle = 'rgba(0,0,0,1)';
+                audioCtx2D.fill();
+                
                 ctx.restore(); audioCtx2D.restore();
+                
+                // 2. Si la goma toca el cuadrito de una percusión: LA ELIMINA limpiamente
+                const q = quantizePos(pos.x, pos.y);
+                let deletedDrum = false;
+                
+                drumSequence[q.col] = drumSequence[q.col].filter(d => {
+                    if (d.row === q.row) { deletedDrum = true; return false; }
+                    return true;
+                });
+                
+                if (deletedDrum) {
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(q.rectX, q.rectY, q.cellW, q.cellH); // Limpia cuadrito visual
+                    audioCtx2D.clearRect(q.rectX, q.rectY, q.cellW, q.cellH); // Limpia cuadrito de audio
+                }
+
                 lastX = pos.x; lastY = pos.y;
-                renderScene();
                 return;
             }
 
@@ -362,45 +371,30 @@
             }
 
             lastX = pos.x; lastY = pos.y;
-            renderScene();
         }
 
-        function drawShape(x, y) {
+        function drawShape(x, y, tool) {
             const rawSize = parseInt(document.getElementById('sizeRange').value);
-            const size = Math.max(rawSize * 1.5, 12);
-            const toolInfo = toolAudioMap[currentTool];
-            const audioColorStr = `rgb(${toolInfo.audioRed}, ${rawSize}, 0)`;
-
-            ctx.save(); audioCtx2D.save();
+            const size = Math.max(rawSize * 1.5, 14); // un poquito más grandes para que se vean bien
             
-            if (currentTool === 'kick') {
+            ctx.save();
+            if (tool === 'kick') {
                 ctx.fillStyle = '#ff4757'; ctx.beginPath(); ctx.arc(x, y, size, 0, Math.PI * 2); ctx.fill();
-            } else if (currentTool === 'hihat') {
+            } else if (tool === 'hihat') {
                 ctx.fillStyle = '#2ed573'; ctx.beginPath();
                 ctx.moveTo(x, y - size); ctx.lineTo(x - size, y + size); ctx.lineTo(x + size, y + size); ctx.closePath(); ctx.fill();
-            } else if (currentTool === 'snare') {
+            } else if (tool === 'snare') {
                 ctx.fillStyle = '#1e90ff'; ctx.fillRect(x - size, y - size, size * 2, size * 2);
-            } else if (currentTool === 'clap') {
+            } else if (tool === 'clap') {
                 ctx.fillStyle = '#ffa502'; ctx.beginPath();
                 ctx.moveTo(x, y - size); ctx.lineTo(x + size, y); ctx.lineTo(x, y + size); ctx.lineTo(x - size, y); ctx.closePath(); ctx.fill();
             }
-
-            audioCtx2D.fillStyle = audioColorStr;
-            audioCtx2D.fillRect(x - 1, y - 1, 2, 2);
-            ctx.restore(); audioCtx2D.restore();
-            
-            if (history.length > 0) {
-                history[history.length - 1].main = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                history[history.length - 1].audio = audioCtx2D.getImageData(0, 0, audioCanvas.width, audioCanvas.height);
-            }
+            ctx.restore();
+            // Nota: Ya NO dibujamos nada de percusiones en el audioCtx2D. Se leen del secuenciador.
         }
 
         function drawLine(context, x1, y1, x2, y2) {
             context.beginPath(); context.moveTo(x1, y1); context.lineTo(x2, y2); context.stroke();
-            if (context === ctx && history.length > 0) {
-                history[history.length - 1].main = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                history[history.length - 1].audio = audioCtx2D.getImageData(0, 0, audioCanvas.width, audioCanvas.height);
-            }
         }
 
         function stopDraw() { isDrawing = false; }
@@ -412,21 +406,23 @@
         canvas.addEventListener('touchmove', draw, { passive: false });
         canvas.addEventListener('touchend', stopDraw);
 
+        // Deshacer Arreglado
         document.getElementById('undoBtn').addEventListener('click', () => {
-            if (history.length > 1) {
-                history.pop();
-                renderScene();
-                const prevState = history[history.length - 1];
+            if (history.length > 0) {
+                const prevState = history.pop();
+                ctx.putImageData(prevState.main, 0, 0);
                 audioCtx2D.putImageData(prevState.audio, 0, 0);
+                drumSequence = JSON.parse(JSON.stringify(prevState.drums));
             }
         });
 
+        // Limpiar Arreglado (Ya no trae fantasmas del pasado)
         document.getElementById('clearBtn').addEventListener('click', () => {
-            saveState();
+            saveState(); // Salva estado para poder Deshacer si te arrepentís
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             audioCtx2D.clearRect(0, 0, audioCanvas.width, audioCanvas.height);
-            renderScene();
+            drumSequence = Array(STEPS).fill(null).map(() => ([])); // Vacía la secuenciadora
         });
 
         function stopAllActiveTones() {
@@ -437,7 +433,6 @@
             }
             continuousTones = {};
             oneShotTones = {};
-            drumCooldown = { kick: 0, hihat: 0, snare: 0, clap: 0 };
         }
 
         const playBtn = document.getElementById('playBtn');
@@ -472,20 +467,32 @@
             requestAnimationFrame(animate);
             if (!isPlaying) return;
 
-            for (const k in drumCooldown) {
-                if (drumCooldown[k] > 0) drumCooldown[k]--;
-            }
-
             const speed = parseFloat(document.getElementById('tempoSelect').value);
             scanX += speed;
-            if (scanX > canvas.width) scanX = 0;
+            if (scanX > canvas.width) {
+                scanX = 0;
+                lastStep = -1; // Resetea para disparar la primera nota de nuevo
+            }
 
             const percent = (scanX / canvas.width) * 100;
             scanLine.style.left = percent + '%';
 
+            // 1. Lee Dibujos Continuos (Melodías) por Píxeles
             checkColumnAndPlay(scanX);
+
+            // 2. Lee las Percusiones desde el Secuenciador (Precisión Absoluta)
+            const currentStep = Math.floor(scanX / (canvas.width / STEPS));
+            if (currentStep !== lastStep && currentStep >= 0 && currentStep < STEPS) {
+                lastStep = currentStep;
+                
+                // Dispara todas las percusiones en esta columna a la vez
+                drumSequence[currentStep].forEach(drum => {
+                    playPercussion(drum.tool, 1.0);
+                });
+            }
         }
 
+        // Simplificado, las percusiones ya no compiten con las melodías acá
         function checkColumnAndPlay(x) {
             const colIndex = Math.floor(x);
             if (colIndex >= audioCanvas.width) return;
@@ -496,7 +503,6 @@
             const currentScale = scales[scaleType];
             const continuousTargets = { lapiz: new Map(), crayon: new Map(), fibra: new Map(), pincel: new Map() };
             const currentOneShots = new Map(); 
-            let drumsInColumn = { kick: 0, hihat: 0, snare: 0, clap: 0 };
 
             for (let y = 0; y < audioCanvas.height; y += 8) {
                 const r = data[(y * 4)];
@@ -505,16 +511,13 @@
 
                 if (alpha > 15) {
                     const rSnap = Math.round(r / 10) * 10; 
-                    if (rSnap >= 10 && rSnap <= 90) {
+                    // Sólo mapea los colores de las herramientas melódicas (<=50)
+                    if (rSnap >= 10 && rSnap <= 50) {
                         let tool = 'lapiz';
                         if (rSnap === 20) tool = 'crayon';
                         else if (rSnap === 30) tool = 'fibra';
                         else if (rSnap === 40) tool = 'pincel';
                         else if (rSnap === 50) tool = 'aerosol';
-                        else if (rSnap === 60) tool = 'kick';
-                        else if (rSnap === 70) tool = 'hihat';
-                        else if (rSnap === 80) tool = 'snare';
-                        else if (rSnap === 90) tool = 'clap';
 
                         const noteIndex = Math.floor(((audioCanvas.height - y) / audioCanvas.height) * currentScale.length);
                         const drawnSize = g > 0 ? g : 4; 
@@ -529,8 +532,6 @@
                         } else if (tool === 'aerosol') {
                             const key = `${tool}_${noteIndex}`;
                             if (!currentOneShots.has(key)) currentOneShots.set(key, intensity);
-                        } else if (['kick', 'hihat', 'snare', 'clap'].includes(tool)) {
-                            drumsInColumn[tool] = Math.max(drumsInColumn[tool], intensity);
                         }
                     }
                 }
@@ -578,15 +579,6 @@
                     }
                 }
                 continuousTones[tool] = nextActive;
-            }
-
-            for (const drum of ['kick', 'hihat', 'snare', 'clap']) {
-                if (drumsInColumn[drum] > 0) {
-                    if (drumCooldown[drum] === 0) {
-                        playPercussion(drum, drumsInColumn[drum]);
-                        drumCooldown[drum] = 30; 
-                    }
-                }
             }
 
             for (const [key, intensity] of currentOneShots.entries()) {
@@ -673,14 +665,13 @@
                     noise.start(now);
 
                 } else if (type === 'snare') {
-                    // Snare estilo House: decay cortísimo y filtro más agudo
                     const osc = audioCtx.createOscillator();
                     const oscGain = audioCtx.createGain();
                     osc.type = 'triangle';
                     osc.frequency.setValueAtTime(220, now);
-                    osc.frequency.exponentialRampToValueAtTime(100, now + 0.05); // Transiente más rápido
+                    osc.frequency.exponentialRampToValueAtTime(100, now + 0.05);
                     oscGain.gain.setValueAtTime(0.6 * volMultiplier, now);
-                    oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.08); // Decay muy corto
+                    oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.08); 
                     osc.connect(oscGain); oscGain.connect(masterGain);
                     osc.start(now); osc.stop(now + 0.1);
 
@@ -691,15 +682,14 @@
                     const noise = audioCtx.createBufferSource();
                     noise.buffer = buffer;
                     const filter = audioCtx.createBiquadFilter();
-                    filter.type = 'bandpass'; filter.frequency.value = 2500; // Un poco más de brillo
+                    filter.type = 'bandpass'; filter.frequency.value = 2500;
                     const noiseGain = audioCtx.createGain();
                     noiseGain.gain.setValueAtTime(0.7 * volMultiplier, now);
-                    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.1); // Ruido muy seco
+                    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.1); 
                     noise.connect(filter); filter.connect(noiseGain); noiseGain.connect(masterGain);
                     noise.start(now);
 
                 } else if (type === 'clap') {
-                    // Síntesis de Clap (Múltiples impactos rápidos de ruido)
                     const bufferSize = audioCtx.sampleRate * 0.15;
                     const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
                     const output = buffer.getChannelData(0);
