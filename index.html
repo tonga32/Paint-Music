@@ -99,7 +99,7 @@
 <body>
 
     <h1>Paint Musical & TR-909 PRO</h1>
-    <p>Lectura de percusión por micropuntos y líneas 100% sólidas.</p>
+    <p>Lectura de percusión ultra-limpia sin rebotes.</p>
 
     <div id="controls">
         <div class="control-group">
@@ -175,9 +175,7 @@
         let continuousTones = {}; 
         let oneShotTones = {};
         
-        // Cooldown para asegurar que el "puntito" de la batería no se dispare doble
         let drumCooldown = { kick: 0, hihat: 0, snare: 0 };
-        
         let history = [];
 
         function saveState() {
@@ -268,7 +266,6 @@
             ctx.lineWidth = size; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
             ctx.strokeStyle = color; ctx.fillStyle = color;
             
-            // EL SECRETO PARA LAS LÍNEAS CONTINUAS: AudioCanvas SIEMPRE dibuja sólido (Alpha 1.0)
             audioCtx2D.globalAlpha = 1.0;
             audioCtx2D.lineWidth = size; audioCtx2D.lineCap = 'round'; audioCtx2D.lineJoin = 'round';
             audioCtx2D.strokeStyle = audioColorStr; audioCtx2D.fillStyle = audioColorStr;
@@ -278,20 +275,19 @@
                     const offsetX = (Math.random() - 0.5) * size * 2.5;
                     const offsetY = (Math.random() - 0.5) * size * 2.5;
                     ctx.globalAlpha = 0.3; ctx.fillRect(pos.x + offsetX, pos.y + offsetY, 2, 2);
-                    // El audio debe ser más sólido para que no se pierda
                     audioCtx2D.globalAlpha = 0.6; audioCtx2D.fillRect(pos.x + offsetX, pos.y + offsetY, 2, 2);
                 }
                 ctx.globalAlpha = 1.0; audioCtx2D.globalAlpha = 1.0;
             } else if (currentTool === 'crayon') {
-                ctx.globalAlpha = 0.5; // Visual transparente
+                ctx.globalAlpha = 0.5;
                 drawLine(ctx, lastX, lastY, pos.x, pos.y); 
-                drawLine(audioCtx2D, lastX, lastY, pos.x, pos.y); // Audio Sólido
+                drawLine(audioCtx2D, lastX, lastY, pos.x, pos.y);
                 ctx.globalAlpha = 1.0;
             } else if (currentTool === 'pincel') {
                 ctx.globalAlpha = 0.3; ctx.lineWidth = size * 1.8;
                 drawLine(ctx, lastX, lastY, pos.x, pos.y); 
                 audioCtx2D.lineWidth = size * 1.8;
-                drawLine(audioCtx2D, lastX, lastY, pos.x, pos.y); // Audio Sólido
+                drawLine(audioCtx2D, lastX, lastY, pos.x, pos.y);
                 ctx.globalAlpha = 1.0; 
             } else if (currentTool === 'fibra') {
                 ctx.lineWidth = size * 1.2; audioCtx2D.lineWidth = size * 1.2;
@@ -311,7 +307,6 @@
 
             ctx.save(); audioCtx2D.save();
             
-            // DIBUJO VISUAL (Para el ojo)
             if (currentTool === 'kick') {
                 ctx.fillStyle = '#ff4757'; ctx.beginPath(); ctx.arc(x, y, size, 0, Math.PI * 2); ctx.fill();
             } else if (currentTool === 'hihat') {
@@ -321,9 +316,8 @@
                 ctx.fillStyle = '#1e90ff'; ctx.fillRect(x - size, y - size, size * 2, size * 2);
             }
 
-            // DIBUJO DE AUDIO OCULTO (¡La idea del puntito!)
             audioCtx2D.fillStyle = audioColorStr;
-            audioCtx2D.fillRect(x - 1, y - 1, 2, 2); // Un micropunto exacto en el centro
+            audioCtx2D.fillRect(x - 1, y - 1, 2, 2);
             
             ctx.restore(); audioCtx2D.restore();
         }
@@ -402,7 +396,6 @@
             requestAnimationFrame(animate);
             if (!isPlaying) return;
 
-            // Restamos tiempo de cooldown de batería
             for (const k in drumCooldown) {
                 if (drumCooldown[k] > 0) drumCooldown[k]--;
             }
@@ -472,7 +465,6 @@
 
             const now = audioCtx.currentTime;
 
-            // --- LÍNEAS CONTINUAS ---
             for (const tool in continuousTargets) {
                 let targets = Array.from(continuousTargets[tool].entries()).map(([noteIdx, intensity]) => {
                     return { freq: currentScale[Math.min(noteIdx, currentScale.length - 1)], intensity };
@@ -505,7 +497,6 @@
                         oscObj.missingFrames = 0;
                         nextActive.push(oscObj);
                     } else if (i < active.length) {
-                        // Tolerancia aumentada para que la línea no tartamudee
                         let oscObj = active[i];
                         oscObj.missingFrames = (oscObj.missingFrames || 0) + 1;
                         if (oscObj.missingFrames > 12) { 
@@ -518,17 +509,17 @@
                 continuousTones[tool] = nextActive;
             }
 
-            // --- BATERÍA (EL PUNTITO OCULTO) ---
+            // --- BATERÍA (COOLDOWN AUMENTADO Y PROTECCIÓN CONTRA SOLAPAMIENTO) ---
             for (const drum of ['kick', 'hihat', 'snare']) {
                 if (drumsInColumn[drum] > 0) {
                     if (drumCooldown[drum] === 0) {
                         playPercussion(drum, drumsInColumn[drum]);
-                        drumCooldown[drum] = 20; // Bloquea el sonido durante 20 frames para evitar disparos dobles
+                        // Aumentamos el cooldown a 30 frames para evitar que lea el mismo punto dos veces seguidas
+                        drumCooldown[drum] = 30; 
                     }
                 }
             }
 
-            // --- AEROSOL ---
             for (const [key, intensity] of currentOneShots.entries()) {
                 if (!oneShotTones[key]) {
                     const [toolStr, noteIdxStr] = key.split('_');
@@ -590,15 +581,18 @@
                     const osc = audioCtx.createOscillator();
                     const gain = audioCtx.createGain();
                     osc.type = 'sine';
-                    osc.frequency.setValueAtTime(150, now);
-                    osc.frequency.exponentialRampToValueAtTime(40, now + 0.08); 
-                    gain.gain.setValueAtTime(1.5 * volMultiplier, now); 
-                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+                    // Pitch sweep bien limpio para evitar clics extraños
+                    osc.frequency.setValueAtTime(130, now);
+                    osc.frequency.exponentialRampToValueAtTime(45, now + 0.06); 
+                    
+                    gain.gain.setValueAtTime(1.8 * volMultiplier, now); 
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25); // Duración justa y limpia
+                    
                     osc.connect(gain); gain.connect(masterGain);
-                    osc.start(now); osc.stop(now + 0.45);
+                    osc.start(now); osc.stop(now + 0.3);
 
                 } else if (type === 'hihat') {
-                    const bufferSize = audioCtx.sampleRate * 0.05;
+                    const bufferSize = audioCtx.sampleRate * 0.04;
                     const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
                     const output = buffer.getChannelData(0);
                     for (let i = 0; i < bufferSize; i++) output[i] = Math.random() * 2 - 1;
@@ -607,8 +601,8 @@
                     const filter = audioCtx.createBiquadFilter();
                     filter.type = 'highpass'; filter.frequency.value = 7000;
                     const gain = audioCtx.createGain();
-                    gain.gain.setValueAtTime(0.8 * volMultiplier, now);
-                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                    gain.gain.setValueAtTime(0.7 * volMultiplier, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
                     noise.connect(filter); filter.connect(gain); gain.connect(masterGain);
                     noise.start(now);
 
@@ -616,14 +610,14 @@
                     const osc = audioCtx.createOscillator();
                     const oscGain = audioCtx.createGain();
                     osc.type = 'triangle';
-                    osc.frequency.setValueAtTime(250, now);
-                    osc.frequency.exponentialRampToValueAtTime(120, now + 0.1);
-                    oscGain.gain.setValueAtTime(0.7 * volMultiplier, now);
-                    oscGain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+                    osc.frequency.setValueAtTime(220, now);
+                    osc.frequency.exponentialRampToValueAtTime(100, now + 0.08);
+                    oscGain.gain.setValueAtTime(0.6 * volMultiplier, now);
+                    oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
                     osc.connect(oscGain); oscGain.connect(masterGain);
-                    osc.start(now); osc.stop(now + 0.25);
+                    osc.start(now); osc.stop(now + 0.18);
 
-                    const bufferSize = audioCtx.sampleRate * 0.25;
+                    const bufferSize = audioCtx.sampleRate * 0.15;
                     const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
                     const output = buffer.getChannelData(0);
                     for (let i = 0; i < bufferSize; i++) output[i] = Math.random() * 2 - 1;
@@ -632,8 +626,8 @@
                     const filter = audioCtx.createBiquadFilter();
                     filter.type = 'bandpass'; filter.frequency.value = 2000;
                     const noiseGain = audioCtx.createGain();
-                    noiseGain.gain.setValueAtTime(0.8 * volMultiplier, now);
-                    noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+                    noiseGain.gain.setValueAtTime(0.7 * volMultiplier, now);
+                    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
                     noise.connect(filter); filter.connect(noiseGain); noiseGain.connect(masterGain);
                     noise.start(now);
                 }
