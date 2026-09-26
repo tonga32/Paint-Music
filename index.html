@@ -173,12 +173,13 @@
             if (history.length > 20) history.shift();
         }
 
+        // Definimos códigos de canal rojo únicos para cada instrumento (valores exactos 10, 20, 30, 40, 50)
         const toolAudioMap = {
-            lapiz:   { type: 'sine',     audioColor: 'rgb(10, 0, 0)' },
-            crayon:  { type: 'triangle', audioColor: 'rgb(20, 0, 0)' },
-            fibra:   { type: 'sawtooth', audioColor: 'rgb(30, 0, 0)' },
-            pincel:  { type: 'sine',     audioColor: 'rgb(40, 0, 0)' },
-            aerosol: { type: 'square',   audioColor: 'rgb(50, 0, 0)' }
+            lapiz:   { type: 'sine',     audioRed: 10 },
+            crayon:  { type: 'triangle', audioRed: 20 },
+            fibra:   { type: 'sawtooth', audioRed: 30 },
+            pincel:  { type: 'sine',     audioRed: 40 },
+            aerosol: { type: 'square',   audioRed: 50 }
         };
 
         const scales = {
@@ -186,10 +187,12 @@
             menor: [130.81, 155.56, 174.61, 196.00, 233.08, 261.63, 311.13, 349.23, 392.00, 466.16, 523.25]
         };
 
+        // Canvas principal blanco
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        audioCtx2D.fillStyle = '#ffffff';
-        audioCtx2D.fillRect(0, 0, audioCanvas.width, audioCanvas.height);
+        
+        // Canvas de audio transparente (limpio por completo)
+        audioCtx2D.clearRect(0, 0, audioCanvas.width, audioCanvas.height);
         saveState();
 
         document.querySelectorAll('.tool-btn').forEach(btn => {
@@ -234,6 +237,7 @@
             const color = document.getElementById('colorPicker').value;
             const size = parseInt(document.getElementById('sizeRange').value);
             const toolInfo = toolAudioMap[currentTool];
+            const audioColorStr = `rgb(${toolInfo.audioRed}, 0, 0)`;
 
             ctx.lineWidth = size;
             ctx.lineCap = 'round';
@@ -244,8 +248,8 @@
             audioCtx2D.lineWidth = size;
             audioCtx2D.lineCap = 'round';
             audioCtx2D.lineJoin = 'round';
-            audioCtx2D.strokeStyle = toolInfo.audioColor;
-            audioCtx2D.fillStyle = toolInfo.audioColor;
+            audioCtx2D.strokeStyle = audioColorStr;
+            audioCtx2D.fillStyle = audioColorStr;
 
             if (currentTool === 'aerosol') {
                 for (let i = 0; i < 10; i++) {
@@ -322,8 +326,7 @@
             saveState();
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-            audioCtx2D.fillStyle = '#ffffff';
-            audioCtx2D.fillRect(0, 0, audioCanvas.width, audioCanvas.height);
+            audioCtx2D.clearRect(0, 0, audioCanvas.width, audioCanvas.height);
         });
 
         const playBtn = document.getElementById('playBtn');
@@ -362,12 +365,12 @@
             const imgData = audioCtx2D.getImageData(colIndex, 0, 1, audioCanvas.height);
             const data = imgData.data;
 
-            // Muestreamos con saltos más amplios (y += 15) para evitar saturar el canal de audio del celular
             for (let y = 0; y < audioCanvas.height; y += 15) {
                 const r = data[(y * 4)];
                 const alpha = data[(y * 4) + 3];
 
-                if (alpha > 40 && r > 0) {
+                // Solo suena si el píxel tiene opacidad real y coincide exactamente con un código de instrumento válido
+                if (alpha > 20 && (r === 10 || r === 20 || r === 30 || r === 40 || r === 50)) {
                     let detectedTool = 'lapiz';
                     if (r === 20) detectedTool = 'crayon';
                     else if (r === 30) detectedTool = 'fibra';
@@ -407,9 +410,7 @@
 
                 osc.start();
                 osc.stop(audioCtx.currentTime + 0.15);
-            } catch (e) {
-                // Previene cortes generales si el navegador limita los nodos de audio
-            }
+            } catch (e) {}
         }
 
         animate();
