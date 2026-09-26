@@ -111,9 +111,10 @@
         </div>
 
         <div class="control-group">
-            <button class="tool-btn" data-tool="kick" title="Kick 909 (Círculo)">⭕</button>
-            <button class="tool-btn" data-tool="hihat" title="Hi-Hat 909 (Triángulo)">🔺</button>
-            <button class="tool-btn" data-tool="snare" title="Snare 909 (Cuadrado)">⬜</button>
+            <button class="tool-btn" data-tool="kick" title="Kick (Círculo)">⭕</button>
+            <button class="tool-btn" data-tool="hihat" title="Hi-Hat (Triángulo)">🔺</button>
+            <button class="tool-btn" data-tool="snare" title="Snare Seco (Cuadrado)">⬜</button>
+            <button class="tool-btn" data-tool="clap" title="Clap House (Diamante)">👏</button>
             <button class="tool-btn" data-tool="goma" title="Goma de borrar">🧹</button>
         </div>
 
@@ -177,10 +178,10 @@
         let continuousTones = {}; 
         let oneShotTones = {};
         
-        let drumCooldown = { kick: 0, hihat: 0, snare: 0 };
+        let drumCooldown = { kick: 0, hihat: 0, snare: 0, clap: 0 };
         let history = [];
 
-        const STEPS = 16; // 16 pasos rítmicos estándar
+        const STEPS = 16; 
 
         function saveState() {
             history.push({
@@ -196,9 +197,10 @@
             fibra:   { type: 'sawtooth', audioRed: 30 },
             pincel:  { type: 'sine',     audioRed: 40 },
             aerosol: { type: 'square',   audioRed: 50 },
-            kick:    { type: 'kick909',  audioRed: 60 },
-            hihat:   { type: 'hihat909', audioRed: 70 },
-            snare:   { type: 'snare909', audioRed: 80 }
+            kick:    { type: 'kick',     audioRed: 60 },
+            hihat:   { type: 'hihat',    audioRed: 70 },
+            snare:   { type: 'snare',    audioRed: 80 },
+            clap:    { type: 'clap',     audioRed: 90 }
         };
 
         const scales = {
@@ -206,13 +208,10 @@
             menor: [130.81, 155.56, 174.61, 196.00, 233.08, 261.63, 311.13, 349.23, 392.00, 466.16, 523.25]
         };
 
-        // Redibuja completamente el lienzo: Fondo blanco + Trazos limpios del usuario + Grilla (si está activa)
         function renderScene() {
-            // 1. Fondo blanco puro
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // 2. Restauramos los trazos del usuario desde el historial actual (si existe)
             if (history.length > 0) {
                 const currentState = history[history.length - 1];
                 const tempCanvas = document.createElement('canvas');
@@ -223,14 +222,12 @@
                 ctx.drawImage(tempCanvas, 0, 0);
             }
 
-            // 3. Dibujamos la grilla por encima si está activada
             if (showGrid) {
                 ctx.save();
                 ctx.strokeStyle = '#2d2d3a'; 
                 ctx.lineWidth = 1;
                 ctx.setLineDash([3, 3]);
 
-                // 16 pasos verticales rítmicos exactos
                 for (let i = 1; i < STEPS; i++) {
                     const x = (canvas.width / STEPS) * i;
                     ctx.beginPath();
@@ -239,7 +236,6 @@
                     ctx.stroke();
                 }
 
-                // Líneas horizontales de referencia
                 const notesCount = 11;
                 for (let i = 1; i < notesCount; i++) {
                     const y = (canvas.height / notesCount) * i;
@@ -252,16 +248,14 @@
             }
         }
 
-        // Cuantización geométrica exacta al centro de cada columna de la grilla
+        // Calcula el centro exacto del espacio entre líneas
         function quantizeXForDrums(x) {
             const stepWidth = canvas.width / STEPS;
-            const stepIndex = Math.round((x - (stepWidth / 2)) / stepWidth);
+            const stepIndex = Math.floor(x / stepWidth);
             const clampedIndex = Math.max(0, Math.min(stepIndex, STEPS - 1));
-            // Retorna exactamente el centro de la celda de la grilla
             return (clampedIndex * stepWidth) + (stepWidth / 2);
         }
 
-        // Inicialización general
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         audioCtx2D.clearRect(0, 0, audioCanvas.width, audioCanvas.height);
@@ -271,8 +265,6 @@
             showGrid = !showGrid;
             e.target.classList.toggle('active', showGrid);
             e.target.textContent = showGrid ? 'Grilla: ON' : 'Grilla: OFF';
-            
-            // Renderizado instantáneo al tocar el botón
             renderScene();
         });
 
@@ -299,10 +291,7 @@
         function startDown(e) {
             e.preventDefault();
             const pos = getPos(e);
-            
-            const isPercussion = ['kick', 'hihat', 'snare'].includes(currentTool);
-            
-            // Si es percusión, cuantizamos automáticamente la posición X al centro de la grilla
+            const isPercussion = ['kick', 'hihat', 'snare', 'clap'].includes(currentTool);
             const targetX = isPercussion ? quantizeXForDrums(pos.x) : pos.x;
 
             saveState();
@@ -320,8 +309,7 @@
             if (!isDrawing) return;
             e.preventDefault();
             const pos = getPos(e);
-            
-            if (['kick', 'hihat', 'snare'].includes(currentTool)) return;
+            if (['kick', 'hihat', 'snare', 'clap'].includes(currentTool)) return;
 
             const color = document.getElementById('colorPicker').value;
             const size = parseInt(document.getElementById('sizeRange').value);
@@ -343,7 +331,6 @@
 
             ctx.lineWidth = size; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
             ctx.strokeStyle = color; ctx.fillStyle = color;
-            
             audioCtx2D.globalAlpha = 1.0;
             audioCtx2D.lineWidth = size; audioCtx2D.lineCap = 'round'; audioCtx2D.lineJoin = 'round';
             audioCtx2D.strokeStyle = audioColorStr; audioCtx2D.fillStyle = audioColorStr;
@@ -393,14 +380,15 @@
                 ctx.moveTo(x, y - size); ctx.lineTo(x - size, y + size); ctx.lineTo(x + size, y + size); ctx.closePath(); ctx.fill();
             } else if (currentTool === 'snare') {
                 ctx.fillStyle = '#1e90ff'; ctx.fillRect(x - size, y - size, size * 2, size * 2);
+            } else if (currentTool === 'clap') {
+                ctx.fillStyle = '#ffa502'; ctx.beginPath();
+                ctx.moveTo(x, y - size); ctx.lineTo(x + size, y); ctx.lineTo(x, y + size); ctx.lineTo(x - size, y); ctx.closePath(); ctx.fill();
             }
 
             audioCtx2D.fillStyle = audioColorStr;
             audioCtx2D.fillRect(x - 1, y - 1, 2, 2);
-            
             ctx.restore(); audioCtx2D.restore();
             
-            // Actualizamos la historia con el nuevo estado pintado
             if (history.length > 0) {
                 history[history.length - 1].main = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 history[history.length - 1].audio = audioCtx2D.getImageData(0, 0, audioCanvas.width, audioCanvas.height);
@@ -409,8 +397,6 @@
 
         function drawLine(context, x1, y1, x2, y2) {
             context.beginPath(); context.moveTo(x1, y1); context.lineTo(x2, y2); context.stroke();
-            
-            // Actualizamos el último estado del historial del canvas principal con el trazo continuo en curso
             if (context === ctx && history.length > 0) {
                 history[history.length - 1].main = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 history[history.length - 1].audio = audioCtx2D.getImageData(0, 0, audioCanvas.width, audioCanvas.height);
@@ -430,7 +416,6 @@
             if (history.length > 1) {
                 history.pop();
                 renderScene();
-                
                 const prevState = history[history.length - 1];
                 audioCtx2D.putImageData(prevState.audio, 0, 0);
             }
@@ -452,14 +437,13 @@
             }
             continuousTones = {};
             oneShotTones = {};
-            drumCooldown = { kick: 0, hihat: 0, snare: 0 };
+            drumCooldown = { kick: 0, hihat: 0, snare: 0, clap: 0 };
         }
 
         const playBtn = document.getElementById('playBtn');
         playBtn.addEventListener('click', () => {
             if (!audioCtx) {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                
                 masterCompressor = audioCtx.createDynamicsCompressor();
                 masterCompressor.threshold.setValueAtTime(-24, audioCtx.currentTime); 
                 masterCompressor.knee.setValueAtTime(30, audioCtx.currentTime);
@@ -481,9 +465,7 @@
             playBtn.textContent = isPlaying ? '⏸ Pausa' : '▶ Play';
             scanLine.style.display = isPlaying ? 'block' : 'none';
 
-            if (!isPlaying) {
-                stopAllActiveTones();
-            }
+            if (!isPlaying) stopAllActiveTones();
         });
 
         function animate() {
@@ -510,14 +492,11 @@
 
             const imgData = audioCtx2D.getImageData(colIndex, 0, 1, audioCanvas.height);
             const data = imgData.data;
-            
             const scaleType = document.getElementById('scaleSelect').value;
             const currentScale = scales[scaleType];
-            
             const continuousTargets = { lapiz: new Map(), crayon: new Map(), fibra: new Map(), pincel: new Map() };
             const currentOneShots = new Map(); 
-            
-            let drumsInColumn = { kick: 0, hihat: 0, snare: 0 };
+            let drumsInColumn = { kick: 0, hihat: 0, snare: 0, clap: 0 };
 
             for (let y = 0; y < audioCanvas.height; y += 8) {
                 const r = data[(y * 4)];
@@ -526,8 +505,7 @@
 
                 if (alpha > 15) {
                     const rSnap = Math.round(r / 10) * 10; 
-
-                    if (rSnap >= 10 && rSnap <= 80) {
+                    if (rSnap >= 10 && rSnap <= 90) {
                         let tool = 'lapiz';
                         if (rSnap === 20) tool = 'crayon';
                         else if (rSnap === 30) tool = 'fibra';
@@ -536,6 +514,7 @@
                         else if (rSnap === 60) tool = 'kick';
                         else if (rSnap === 70) tool = 'hihat';
                         else if (rSnap === 80) tool = 'snare';
+                        else if (rSnap === 90) tool = 'clap';
 
                         const noteIndex = Math.floor(((audioCanvas.height - y) / audioCanvas.height) * currentScale.length);
                         const drawnSize = g > 0 ? g : 4; 
@@ -550,7 +529,7 @@
                         } else if (tool === 'aerosol') {
                             const key = `${tool}_${noteIndex}`;
                             if (!currentOneShots.has(key)) currentOneShots.set(key, intensity);
-                        } else if (['kick', 'hihat', 'snare'].includes(tool)) {
+                        } else if (['kick', 'hihat', 'snare', 'clap'].includes(tool)) {
                             drumsInColumn[tool] = Math.max(drumsInColumn[tool], intensity);
                         }
                     }
@@ -576,10 +555,8 @@
                     if (i < targets.length && i < active.length) {
                         let oscObj = active[i];
                         let target = targets[i];
-                        
                         oscObj.missingFrames = 0; 
                         oscObj.osc.frequency.setTargetAtTime(target.freq, now, 0.05);
-                        
                         const vol = 0.2 * target.intensity;
                         oscObj.gainNode.gain.setTargetAtTime(vol, now, 0.03);
                         oscObj.freq = target.freq;
@@ -603,7 +580,7 @@
                 continuousTones[tool] = nextActive;
             }
 
-            for (const drum of ['kick', 'hihat', 'snare']) {
+            for (const drum of ['kick', 'hihat', 'snare', 'clap']) {
                 if (drumsInColumn[drum] > 0) {
                     if (drumCooldown[drum] === 0) {
                         playPercussion(drum, drumsInColumn[drum]);
@@ -675,10 +652,8 @@
                     osc.type = 'sine';
                     osc.frequency.setValueAtTime(130, now);
                     osc.frequency.exponentialRampToValueAtTime(45, now + 0.06); 
-                    
                     gain.gain.setValueAtTime(1.8 * volMultiplier, now); 
                     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
-                    
                     osc.connect(gain); gain.connect(masterGain);
                     osc.start(now); osc.stop(now + 0.3);
 
@@ -698,28 +673,53 @@
                     noise.start(now);
 
                 } else if (type === 'snare') {
+                    // Snare estilo House: decay cortísimo y filtro más agudo
                     const osc = audioCtx.createOscillator();
                     const oscGain = audioCtx.createGain();
                     osc.type = 'triangle';
                     osc.frequency.setValueAtTime(220, now);
-                    osc.frequency.exponentialRampToValueAtTime(100, now + 0.08);
+                    osc.frequency.exponentialRampToValueAtTime(100, now + 0.05); // Transiente más rápido
                     oscGain.gain.setValueAtTime(0.6 * volMultiplier, now);
-                    oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+                    oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.08); // Decay muy corto
                     osc.connect(oscGain); oscGain.connect(masterGain);
-                    osc.start(now); osc.stop(now + 0.18);
+                    osc.start(now); osc.stop(now + 0.1);
 
-                    const bufferSize = audioCtx.sampleRate * 0.15;
+                    const bufferSize = audioCtx.sampleRate * 0.1;
                     const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
                     const output = buffer.getChannelData(0);
                     for (let i = 0; i < bufferSize; i++) output[i] = Math.random() * 2 - 1;
                     const noise = audioCtx.createBufferSource();
                     noise.buffer = buffer;
                     const filter = audioCtx.createBiquadFilter();
-                    filter.type = 'bandpass'; filter.frequency.value = 2000;
+                    filter.type = 'bandpass'; filter.frequency.value = 2500; // Un poco más de brillo
                     const noiseGain = audioCtx.createGain();
                     noiseGain.gain.setValueAtTime(0.7 * volMultiplier, now);
-                    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+                    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.1); // Ruido muy seco
                     noise.connect(filter); filter.connect(noiseGain); noiseGain.connect(masterGain);
+                    noise.start(now);
+
+                } else if (type === 'clap') {
+                    // Síntesis de Clap (Múltiples impactos rápidos de ruido)
+                    const bufferSize = audioCtx.sampleRate * 0.15;
+                    const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                    const output = buffer.getChannelData(0);
+                    for (let i = 0; i < bufferSize; i++) output[i] = Math.random() * 2 - 1;
+                    const noise = audioCtx.createBufferSource();
+                    noise.buffer = buffer;
+                    
+                    const filter = audioCtx.createBiquadFilter();
+                    filter.type = 'bandpass'; filter.frequency.value = 1500;
+                    
+                    const gain = audioCtx.createGain();
+                    gain.gain.setValueAtTime(0, now);
+                    gain.gain.setValueAtTime(0.8 * volMultiplier, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.02);
+                    gain.gain.setValueAtTime(0.9 * volMultiplier, now + 0.02);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+                    gain.gain.setValueAtTime(1.0 * volMultiplier, now + 0.04);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+
+                    noise.connect(filter); filter.connect(gain); gain.connect(masterGain);
                     noise.start(now);
                 }
             } catch (e) {}
