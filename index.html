@@ -83,7 +83,6 @@
             cursor: crosshair;
         }
 
-        /* Línea vertical de escaneo por CSS (no altera los píxeles del dibujo) */
         #scanLine {
             position: absolute;
             top: 0;
@@ -144,11 +143,8 @@
     </div>
 
     <div class="canvas-container">
-        <!-- Canvas principal visual limpio -->
         <canvas id="canvas" width="500" height="500"></canvas>
-        <!-- Canvas oculto de audio para identificar el instrumento de cada trazo -->
         <canvas id="audioCanvas" width="500" height="500" style="display:none;"></canvas>
-        <!-- Línea de escaneo visual -->
         <div id="scanLine"></div>
     </div>
 
@@ -190,7 +186,6 @@
             menor: [130.81, 155.56, 174.61, 196.00, 233.08, 261.63, 311.13, 349.23, 392.00, 466.16, 523.25]
         };
 
-        // Inicializar ambos canvas en blanco puro
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         audioCtx2D.fillStyle = '#ffffff';
@@ -253,7 +248,7 @@
             audioCtx2D.fillStyle = toolInfo.audioColor;
 
             if (currentTool === 'aerosol') {
-                for (let i = 0; i < 12; i++) {
+                for (let i = 0; i < 10; i++) {
                     const offsetX = (Math.random() - 0.5) * size * 2.5;
                     const offsetY = (Math.random() - 0.5) * size * 2.5;
                     
@@ -354,11 +349,9 @@
             scanX += speed;
             if (scanX > canvas.width) scanX = 0;
 
-            // Mover la línea visualmente de forma fluida adaptada al tamaño del contenedor
             const percent = (scanX / canvas.width) * 100;
             scanLine.style.left = percent + '%';
 
-            // Escanear los píxeles actuales y disparar sonido
             checkColumnAndPlay(scanX);
         }
 
@@ -369,13 +362,12 @@
             const imgData = audioCtx2D.getImageData(colIndex, 0, 1, audioCanvas.height);
             const data = imgData.data;
 
-            for (let y = 0; y < audioCanvas.height; y += 6) {
+            // Muestreamos con saltos más amplios (y += 15) para evitar saturar el canal de audio del celular
+            for (let y = 0; y < audioCanvas.height; y += 15) {
                 const r = data[(y * 4)];
-                const g = data[(y * 4) + 1];
-                const b = data[(y * 4) + 2];
                 const alpha = data[(y * 4) + 3];
 
-                if (alpha > 40 && (r > 0 || g > 0 || b > 0)) {
+                if (alpha > 40 && r > 0) {
                     let detectedTool = 'lapiz';
                     if (r === 20) detectedTool = 'crayon';
                     else if (r === 30) detectedTool = 'fibra';
@@ -389,7 +381,7 @@
                     const frequency = currentScale[Math.min(noteIndex, currentScale.length - 1)];
 
                     const currentSize = parseInt(document.getElementById('sizeRange').value);
-                    const intensity = Math.min(currentSize / 12, 2.0);
+                    const intensity = Math.min(currentSize / 10, 1.5);
 
                     playTone(frequency, intensity, detectedTool);
                 }
@@ -399,21 +391,25 @@
         function playTone(freq, intensity, tool) {
             if (!audioCtx) return;
 
-            const osc = audioCtx.createOscillator();
-            const gainNode = audioCtx.createGain();
+            try {
+                const osc = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
 
-            osc.type = toolAudioMap[tool].type;
-            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                osc.type = toolAudioMap[tool].type;
+                osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
 
-            const baseGain = 0.03 * intensity;
-            gainNode.gain.setValueAtTime(baseGain, audioCtx.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.2);
+                const baseGain = 0.02 * intensity;
+                gainNode.gain.setValueAtTime(baseGain, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.15);
 
-            osc.connect(gainNode);
-            gainNode.connect(audioCtx.destination);
+                osc.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
 
-            osc.start();
-            osc.stop(audioCtx.currentTime + 0.2);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.15);
+            } catch (e) {
+                // Previene cortes generales si el navegador limita los nodos de audio
+            }
         }
 
         animate();
