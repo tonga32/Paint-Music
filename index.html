@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Paint Musical - Drums Pro & Quantized Grid</title>
+    <title>Paint Musical - Drums Pro & Grid</title>
     <style>
         body {
             margin: 0;
@@ -99,7 +99,7 @@
 <body>
 
     <h1>Paint Musical & TR-909 PRO</h1>
-    <p>Con grilla métrica negra y cuantización automática.</p>
+    <p>Dibujo libre melódico + Grilla y cuantizador rítmico para percusiones.</p>
 
     <div id="controls">
         <div class="control-group">
@@ -212,11 +212,11 @@
 
             if (showGrid) {
                 ctx.save();
-                ctx.strokeStyle = '#2d2d3a'; // Líneas negras/oscuras bien visibles
+                ctx.strokeStyle = '#2d2d3a'; // Líneas negras divisorias visibles
                 ctx.lineWidth = 1;
-                ctx.setLineDash([3, 3]); // Estilo punteado técnico pro
+                ctx.setLineDash([3, 3]);
 
-                // 16 pasos verticales
+                // 16 pasos verticales rítmicos
                 for (let i = 1; i < STEPS; i++) {
                     const x = (canvas.width / STEPS) * i;
                     ctx.beginPath();
@@ -225,7 +225,7 @@
                     ctx.stroke();
                 }
 
-                // Líneas horizontales de notas
+                // Líneas horizontales de referencia
                 const notesCount = 11;
                 for (let i = 1; i < notesCount; i++) {
                     const y = (canvas.height / notesCount) * i;
@@ -238,8 +238,8 @@
             }
         }
 
-        // Función que cuantiza una coordenada X a la columna exacta de la grilla si está activa
-        function quantizeX(x) {
+        // Cuantización exclusiva para percusiones (Kicks, Hi-Hats, Snares)
+        function quantizeXForDrums(x) {
             if (!showGrid) return x;
             const stepWidth = canvas.width / STEPS;
             const stepIndex = Math.round(x / stepWidth);
@@ -254,6 +254,8 @@
             showGrid = !showGrid;
             e.target.classList.toggle('active', showGrid);
             e.target.textContent = showGrid ? 'Grilla: ON' : 'Grilla: OFF';
+            
+            // Redibujamos inmediatamente al presionar el botón
             redrawCanvasFromHistory();
         });
 
@@ -298,12 +300,14 @@
             saveState();
             const pos = getPos(e);
             
-            // Aplicamos cuantización al punto inicial si la grilla está activa
-            const qX = quantizeX(pos.x);
-            lastX = qX; lastY = pos.y;
+            // Si es percusión cuantizamos la posición X a la grilla; si es dibujo libre, va exacto al toque
+            const isPercussion = ['kick', 'hihat', 'snare'].includes(currentTool);
+            const targetX = isPercussion ? quantizeXForDrums(pos.x) : pos.x;
+
+            lastX = targetX; lastY = pos.y;
             
-            if (currentTool === 'kick' || currentTool === 'hihat' || currentTool === 'snare') {
-                drawShape(qX, pos.y);
+            if (isPercussion) {
+                drawShape(targetX, pos.y);
             }
         }
 
@@ -312,20 +316,19 @@
             e.preventDefault();
             const pos = getPos(e);
             
-            if (currentTool === 'kick' || currentTool === 'hihat' || currentTool === 'snare') return;
+            if (['kick', 'hihat', 'snare'].includes(currentTool)) return;
 
-            const qX = quantizeX(pos.x);
             const color = document.getElementById('colorPicker').value;
             const size = parseInt(document.getElementById('sizeRange').value);
 
             if (currentTool === 'goma') {
                 ctx.save(); audioCtx2D.save();
                 ctx.beginPath(); audioCtx2D.beginPath();
-                ctx.arc(qX, pos.y, size * 1.5, 0, Math.PI * 2);
+                ctx.arc(pos.x, pos.y, size * 1.5, 0, Math.PI * 2);
                 ctx.fillStyle = '#ffffff'; ctx.fill();
-                audioCtx2D.clearRect(qX - size*1.5, pos.y - size*1.5, size*3, size*3);
+                audioCtx2D.clearRect(pos.x - size*1.5, pos.y - size*1.5, size*3, size*3);
                 ctx.restore(); audioCtx2D.restore();
-                lastX = qX; lastY = pos.y;
+                lastX = pos.x; lastY = pos.y;
                 return;
             }
 
@@ -343,29 +346,29 @@
                 for (let i = 0; i < 10; i++) {
                     const offsetX = (Math.random() - 0.5) * size * 2.5;
                     const offsetY = (Math.random() - 0.5) * size * 2.5;
-                    ctx.globalAlpha = 0.3; ctx.fillRect(qX + offsetX, pos.y + offsetY, 2, 2);
-                    audioCtx2D.globalAlpha = 0.6; audioCtx2D.fillRect(qX + offsetX, pos.y + offsetY, 2, 2);
+                    ctx.globalAlpha = 0.3; ctx.fillRect(pos.x + offsetX, pos.y + offsetY, 2, 2);
+                    audioCtx2D.globalAlpha = 0.6; audioCtx2D.fillRect(pos.x + offsetX, pos.y + offsetY, 2, 2);
                 }
                 ctx.globalAlpha = 1.0; audioCtx2D.globalAlpha = 1.0;
             } else if (currentTool === 'crayon') {
                 ctx.globalAlpha = 0.5;
-                drawLine(ctx, lastX, lastY, qX, pos.y); 
-                drawLine(audioCtx2D, lastX, lastY, qX, pos.y);
+                drawLine(ctx, lastX, lastY, pos.x, pos.y); 
+                drawLine(audioCtx2D, lastX, lastY, pos.x, pos.y);
                 ctx.globalAlpha = 1.0;
             } else if (currentTool === 'pincel') {
                 ctx.globalAlpha = 0.3; ctx.lineWidth = size * 1.8;
-                drawLine(ctx, lastX, lastY, qX, pos.y); 
+                drawLine(ctx, lastX, lastY, pos.x, pos.y); 
                 audioCtx2D.lineWidth = size * 1.8;
-                drawLine(audioCtx2D, lastX, lastY, qX, pos.y);
+                drawLine(audioCtx2D, lastX, lastY, pos.x, pos.y);
                 ctx.globalAlpha = 1.0; 
             } else if (currentTool === 'fibra') {
                 ctx.lineWidth = size * 1.2; audioCtx2D.lineWidth = size * 1.2;
-                drawLine(ctx, lastX, lastY, qX, pos.y); drawLine(audioCtx2D, lastX, lastY, qX, pos.y);
+                drawLine(ctx, lastX, lastY, pos.x, pos.y); drawLine(audioCtx2D, lastX, lastY, pos.x, pos.y);
             } else {
-                drawLine(ctx, lastX, lastY, qX, pos.y); drawLine(audioCtx2D, lastX, lastY, qX, pos.y);
+                drawLine(ctx, lastX, lastY, pos.x, pos.y); drawLine(audioCtx2D, lastX, lastY, pos.x, pos.y);
             }
 
-            lastX = qX; lastY = pos.y;
+            lastX = pos.x; lastY = pos.y;
         }
 
         function drawShape(x, y) {
