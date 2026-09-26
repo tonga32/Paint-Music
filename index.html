@@ -16,29 +16,29 @@
             align-items: center;
             touch-action: none;
         }
-        h1 { margin: 5px 0; font-size: 1.5rem; text-align: center; }
-        p { margin: 0 0 10px 0; color: #a0a0c0; font-size: 0.9rem; text-align: center; }
+        h1 { margin: 5px 0; font-size: 1.4rem; text-align: center; }
+        p { margin: 0 0 10px 0; color: #a0a0c0; font-size: 0.85rem; text-align: center; }
         
         #controls {
             display: flex;
-            gap: 10px;
+            gap: 8px;
             margin-bottom: 10px;
             background: #1e1e2f;
-            padding: 10px;
+            padding: 8px;
             border-radius: 10px;
             align-items: center;
             flex-wrap: wrap;
             justify-content: center;
-            max-width: 800px;
+            max-width: 500px;
         }
         .control-group {
             display: flex;
             align-items: center;
             gap: 5px;
-            font-size: 0.85rem;
+            font-size: 0.8rem;
         }
         button, select, input {
-            padding: 6px 10px;
+            padding: 6px 8px;
             border: none;
             border-radius: 5px;
             background: #4e4efc;
@@ -52,71 +52,98 @@
         
         input[type="color"] {
             border: none;
-            width: 35px;
-            height: 30px;
+            width: 32px;
+            height: 28px;
             padding: 0;
             cursor: pointer;
             background: none;
         }
         input[type="range"] {
-            width: 80px;
+            width: 70px;
+        }
+
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            max-width: 420px;
+            aspect-ratio: 1 / 1;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.5);
+            border-radius: 10px;
+            overflow: hidden;
+            border: 3px solid #3a3a5c;
         }
 
         canvas {
-            background: #ffffff; /* Lienzo blanco como pediste */
-            border: 3px solid #3a3a5c;
-            border-radius: 10px;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #ffffff;
             cursor: crosshair;
-            box-shadow: 0 8px 20px rgba(0,0,0,0.5);
-            max-width: 100%;
-            height: auto;
         }
     </style>
 </head>
 <body>
 
     <h1>Paint Musical Pentatónico</h1>
-    <p>Dibujá en el lienzo blanco. La línea roja escanea y toca música.</p>
+    <p>Dibujá con diferentes herramientas y dale Play.</p>
 
     <div id="controls">
         <div class="control-group">
-            <button class="tool-btn active" data-tool="lapiz">Lápiz</button>
-            <button class="tool-btn" data-tool="crayon">Crayón</button>
-            <button class="tool-btn" data-tool="fibra">Fibra</button>
-            <button class="tool-btn" data-tool="pincel">Pincel</button>
-            <button class="tool-btn" data-tool="aerosol">Spray</button>
+            <button class="tool-btn active" data-tool="lapiz" title="Lápiz">✏️</button>
+            <button class="tool-btn" data-tool="crayon" title="Crayón">🖍️</button>
+            <button class="tool-btn" data-tool="fibra" title="Fibra">✒️</button>
+            <button class="tool-btn" data-tool="pincel" title="Pincel">🖌️</button>
+            <button class="tool-btn" data-tool="aerosol" title="Spray">💨</button>
         </div>
 
         <div class="control-group">
-            <label>Color:</label>
-            <input type="color" id="colorPicker" value="#000000">
+            <input type="color" id="colorPicker" value="#000000" title="Color">
         </div>
 
         <div class="control-group">
             <label>Grosor:</label>
-            <input type="range" id="sizeRange" min="1" max="30" value="4">
+            <input type="range" id="sizeRange" min="1" max="25" value="4">
+        </div>
+
+        <div class="control-group">
+            <label>Tempo:</label>
+            <select id="tempoSelect">
+                <option value="1">Lento</option>
+                <option value="2" selected>Normal</option>
+                <option value="3.5">Rápido</option>
+            </select>
         </div>
 
         <div class="control-group">
             <label>Escala:</label>
             <select id="scaleSelect">
-                <option value="mayor">Pentatónica Mayor</option>
-                <option value="menor">Pentatónica Menor</option>
+                <option value="mayor">Mayor</option>
+                <option value="menor">Menor</option>
             </select>
         </div>
 
         <div class="control-group">
-            <button id="playBtn" style="background: #00b894;">▶ Reproducir</button>
-            <button id="undoBtn" style="background: #e17055;">↶ Deshacer</button>
-            <button id="clearBtn" style="background: #d63031;">🗑 Borrar</button>
+            <button id="playBtn" style="background: #00b894;">▶ Play</button>
+            <button id="undoBtn" style="background: #e17055;">↶</button>
+            <button id="clearBtn" style="background: #d63031;">🗑</button>
         </div>
     </div>
 
-    <canvas id="canvas" width="800" height="450"></canvas>
+    <div class="canvas-container">
+        <!-- Canvas principal visual -->
+        <canvas id="canvas" width="500" height="500"></canvas>
+        <!-- Canvas oculto de audio que guarda los trazos con sus tipos de onda exactos -->
+        <canvas id="audioCanvas" width="500" height="500" style="display:none;"></canvas>
+    </div>
 
     <script>
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
+
+        const audioCanvas = document.getElementById('audioCanvas');
+        const audioCtx2D = audioCanvas.getContext('2d');
         
         let isDrawing = false;
         let currentTool = 'lapiz';
@@ -124,49 +151,56 @@
         let scanX = 0;
         let audioCtx = null;
         
-        // Historial para el botón Deshacer
         let history = [];
 
         function saveState() {
-            history.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
-            if (history.length > 20) history.shift(); // Limitar historial a 20 pasos
+            history.push({
+                main: ctx.getImageData(0, 0, canvas.width, canvas.height),
+                audio: audioCtx2D.getImageData(0, 0, audioCanvas.width, audioCanvas.height)
+            });
+            if (history.length > 20) history.shift();
         }
 
-        // Configuración base de timbres por herramienta
-        const toolTypes = {
-            lapiz: 'sine',
-            crayon: 'triangle',
-            fibra: 'sawtooth',
-            pincel: 'sine',
-            aerosol: 'square'
+        // Mapeo de herramientas a tipos de onda y colores clave cifrados para el canvas de audio
+        // Usamos colores únicos en el canal Rojo (R) para identificar qué instrumento tocó cada píxel
+        const toolAudioMap = {
+            lapiz:   { type: 'sine',     audioColor: 'rgb(10, 0, 0)' },
+            crayon:  { type: 'triangle', audioColor: 'rgb(20, 0, 0)' },
+            fibra:   { type: 'sawtooth', audioColor: 'rgb(30, 0, 0)' },
+            pincel:  { type: 'sine',     audioColor: 'rgb(40, 0, 0)' },
+            aerosol: { type: 'square',   audioColor: 'rgb(50, 0, 0)' }
         };
 
-        // Escalas pentatónicas en frecuencias (Hz)
         const scales = {
             mayor: [130.81, 146.83, 164.81, 196.00, 220.00, 261.63, 293.66, 329.63, 392.00, 440.00, 523.25],
             menor: [130.81, 155.56, 174.61, 196.00, 233.08, 261.63, 311.13, 349.23, 392.00, 466.16, 523.25]
         };
 
-        // Guardar estado inicial en blanco
+        // Inicializar canvas de audio con fondo blanco puro
+        audioCtx2D.fillStyle = '#ffffff';
+        audioCtx2D.fillRect(0, 0, audioCanvas.width, audioCanvas.height);
         saveState();
 
-        // Herramientas
         document.querySelectorAll('.tool-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
-                e.target.classList.add('active');
-                currentTool = e.target.dataset.tool;
+                const targetBtn = e.target.closest('button');
+                targetBtn.classList.add('active');
+                currentTool = targetBtn.dataset.tool;
             });
         });
 
-        // Eventos táctiles y de mouse unificados
         function getPos(e) {
             const rect = canvas.getBoundingClientRect();
             const clientX = e.touches ? e.touches[0].clientX : e.clientX;
             const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+
             return {
-                x: clientX - rect.left,
-                y: clientY - rect.top
+                x: (clientX - rect.left) * scaleX,
+                y: (clientY - rect.top) * scaleY
             };
         }
 
@@ -188,74 +222,107 @@
             
             const color = document.getElementById('colorPicker').value;
             const size = parseInt(document.getElementById('sizeRange').value);
+            const toolInfo = toolAudioMap[currentTool];
 
+            // 1. Dibujar en el Canvas Visual (con el color elegido por el usuario)
             ctx.lineWidth = size;
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
             ctx.strokeStyle = color;
             ctx.fillStyle = color;
 
+            // 2. Dibujar en el Canvas Oculto de Audio (con el color técnico que guarda la herramienta)
+            audioCtx2D.lineWidth = size;
+            audioCtx2D.lineCap = 'round';
+            audioCtx2D.lineJoin = 'round';
+            audioCtx2D.strokeStyle = toolInfo.audioColor;
+            audioCtx2D.fillStyle = toolInfo.audioColor;
+
             if (currentTool === 'aerosol') {
-                for (let i = 0; i < 15; i++) {
-                    const offsetX = (Math.random() - 0.5) * size * 2;
-                    const offsetY = (Math.random() - 0.5) * size * 2;
+                for (let i = 0; i < 12; i++) {
+                    const offsetX = (Math.random() - 0.5) * size * 2.5;
+                    const offsetY = (Math.random() - 0.5) * size * 2.5;
+                    
+                    ctx.globalAlpha = 0.3;
                     ctx.fillRect(pos.x + offsetX, pos.y + offsetY, 2, 2);
+                    ctx.globalAlpha = 1.0;
+
+                    audioCtx2D.globalAlpha = 0.3;
+                    audioCtx2D.fillRect(pos.x + offsetX, pos.y + offsetY, 2, 2);
+                    audioCtx2D.globalAlpha = 1.0;
                 }
             } else if (currentTool === 'crayon') {
-                ctx.globalAlpha = 0.6;
-                ctx.beginPath();
-                ctx.moveTo(lastX, lastY);
-                ctx.lineTo(pos.x, pos.y);
-                ctx.stroke();
+                ctx.globalAlpha = 0.5;
+                audioCtx2D.globalAlpha = 0.5;
+                
+                drawLine(ctx, lastX, lastY, pos.x, pos.y);
+                drawLine(audioCtx2D, lastX, lastY, pos.x, pos.y);
+                
                 ctx.globalAlpha = 1.0;
+                audioCtx2D.globalAlpha = 1.0;
             } else if (currentTool === 'pincel') {
-                ctx.globalAlpha = 0.4;
-                ctx.beginPath();
-                ctx.moveTo(lastX, lastY);
-                ctx.lineTo(pos.x, pos.y);
-                ctx.stroke();
+                ctx.globalAlpha = 0.3;
+                audioCtx2D.globalAlpha = 0.3;
+                
+                ctx.lineWidth = size * 1.8;
+                audioCtx2D.lineWidth = size * 1.8;
+                
+                drawLine(ctx, lastX, lastY, pos.x, pos.y);
+                drawLine(audioCtx2D, lastX, lastY, pos.x, pos.y);
+                
                 ctx.globalAlpha = 1.0;
+                audioCtx2D.globalAlpha = 1.0;
+            } else if (currentTool === 'fibra') {
+                ctx.lineWidth = size * 1.2;
+                audioCtx2D.lineWidth = size * 1.2;
+                
+                drawLine(ctx, lastX, lastY, pos.x, pos.y);
+                drawLine(audioCtx2D, lastX, lastY, pos.x, pos.y);
             } else {
-                // Lápiz y Fibra
-                ctx.beginPath();
-                ctx.moveTo(lastX, lastY);
-                ctx.lineTo(pos.x, pos.y);
-                ctx.stroke();
+                // Lápiz
+                drawLine(ctx, lastX, lastY, pos.x, pos.y);
+                drawLine(audioCtx2D, lastX, lastY, pos.x, pos.y);
             }
 
             lastX = pos.x;
             lastY = pos.y;
         }
 
+        function drawLine(context, x1, y1, x2, y2) {
+            context.beginPath();
+            context.moveTo(x1, y1);
+            context.lineTo(x2, y2);
+            context.stroke();
+        }
+
         function stopDraw() {
             isDrawing = false;
         }
 
-        // Listeners Mouse
         canvas.addEventListener('mousedown', startDraw);
         canvas.addEventListener('mousemove', draw);
         window.addEventListener('mouseup', stopDraw);
 
-        // Listeners Tactiles (Celular)
         canvas.addEventListener('touchstart', startDraw, { passive: false });
         canvas.addEventListener('touchmove', draw, { passive: false });
         canvas.addEventListener('touchend', stopDraw);
 
-        // Botones de acción
         document.getElementById('undoBtn').addEventListener('click', () => {
             if (history.length > 1) {
-                history.pop(); // Sacar estado actual
-                const previousState = history[history.length - 1];
-                ctx.putImageData(previousState, 0, 0);
+                history.pop();
+                const prevState = history[history.length - 1];
+                ctx.putImageData(prevState.main, 0, 0);
+                audioCtx2D.putImageData(prevState.audio, 0, 0);
             }
         });
 
         document.getElementById('clearBtn').addEventListener('click', () => {
             saveState();
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            audioCtx2D.fillStyle = '#ffffff';
+            audioCtx2D.fillRect(0, 0, audioCanvas.width, audioCanvas.height);
         });
 
-        // Reproductor de Audio
         const playBtn = document.getElementById('playBtn');
         playBtn.addEventListener('click', () => {
             if (!audioCtx) {
@@ -266,48 +333,71 @@
             }
             isPlaying = !isPlaying;
             playBtn.classList.toggle('active', isPlaying);
-            playBtn.textContent = isPlaying ? '⏸ Pausar' : '▶ Reproducir';
+            playBtn.textContent = isPlaying ? '⏸ Pausa' : '▶ Play';
         });
 
-        // Loop principal con línea de escaneo visual
-        let lastTime = 0;
-        function animate(timestamp) {
+        let drawingCache = document.createElement('canvas');
+        drawingCache.width = canvas.width;
+        drawingCache.height = canvas.height;
+        let cacheCtx = drawingCache.getContext('2d');
+
+        function animate() {
             requestAnimationFrame(animate);
 
             if (!isPlaying) return;
 
-            // Guardamos el frame actual antes de pintar la línea roja de escaneo
-            // Para mantenerlo simple, hacemos el escaneo leyendo los píxeles
-            scanX += 2;
+            const speed = parseFloat(document.getElementById('tempoSelect').value);
+            scanX += speed;
             if (scanX > canvas.width) scanX = 0;
+
+            cacheCtx.clearRect(0, 0, canvas.width, canvas.height);
+            cacheCtx.drawImage(canvas, 0, 0);
+
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(drawingCache, 0, 0);
+
+            // Línea roja de escaneo
+            ctx.strokeStyle = '#ff4757';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(scanX, 0);
+            ctx.lineTo(scanX, canvas.height);
+            ctx.stroke();
 
             checkColumnAndPlay(scanX);
         }
 
         function checkColumnAndPlay(x) {
             const colIndex = Math.floor(x);
-            const imgData = ctx.getImageData(colIndex, 0, 1, canvas.height);
+            // Escaneamos el canvas oculto de audio para detectar qué herramienta dibujó cada píxel
+            const imgData = audioCtx2D.getImageData(colIndex, 0, 1, audioCanvas.height);
             const data = imgData.data;
 
-            for (let y = 0; y < canvas.height; y += 6) {
-                const r = data[(y * 4)];
+            for (let y = 0; y < audioCanvas.height; y += 6) {
+                const r = data[(y * 4)];     // Canal rojo codifica el tipo de instrumento
                 const g = data[(y * 4) + 1];
                 const b = data[(y * 4) + 2];
                 const alpha = data[(y * 4) + 3];
 
-                // Si el píxel no es completamente blanco (tiene dibujo)
-                if (alpha > 50 && (r < 240 || g < 240 || b < 240)) {
+                // Si hay un trazo válido (no es blanco puro)
+                if (alpha > 40 && (r > 0 || g > 0 || b > 0)) {
+                    let detectedTool = 'lapiz';
+                    if (r === 20) detectedTool = 'crayon';
+                    else if (r === 30) detectedTool = 'fibra';
+                    else if (r === 40) detectedTool = 'pincel';
+                    else if (r === 50) detectedTool = 'aerosol';
+
                     const scaleType = document.getElementById('scaleSelect').value;
                     const currentScale = scales[scaleType];
                     
-                    const noteIndex = Math.floor(((canvas.height - y) / canvas.height) * currentScale.length);
+                    const noteIndex = Math.floor(((audioCanvas.height - y) / audioCanvas.height) * currentScale.length);
                     const frequency = currentScale[Math.min(noteIndex, currentScale.length - 1)];
 
-                    // Intensidad basada en el grosor seleccionado actualmente o el color
                     const currentSize = parseInt(document.getElementById('sizeRange').value);
-                    const intensity = Math.min(currentSize / 15, 1.5); // Más grueso = más intensidad
+                    const intensity = Math.min(currentSize / 12, 2.0);
 
-                    playTone(frequency, intensity, currentTool);
+                    playTone(frequency, intensity, detectedTool);
                 }
             }
         }
@@ -318,10 +408,10 @@
             const osc = audioCtx.createOscillator();
             const gainNode = audioCtx.createGain();
 
-            osc.type = toolTypes[tool] || 'sine';
+            osc.type = toolAudioMap[tool].type;
             osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
 
-            const baseGain = 0.04 * intensity;
+            const baseGain = 0.03 * intensity;
             gainNode.gain.setValueAtTime(baseGain, audioCtx.currentTime);
             gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.2);
 
