@@ -87,7 +87,7 @@
 <body>
 
     <h1>Paint Musical Pentatónico</h1>
-    <p>Dibujá con diferentes herramientas y dale Play.</p>
+    <p>Dibujá con tus herramientas y dale Play.</p>
 
     <div id="controls">
         <div class="control-group">
@@ -132,9 +132,9 @@
     </div>
 
     <div class="canvas-container">
-        <!-- Canvas principal visual -->
+        <!-- Canvas principal de dibujo -->
         <canvas id="canvas" width="500" height="500"></canvas>
-        <!-- Canvas oculto de audio que guarda los trazos con sus tipos de onda exactos -->
+        <!-- Canvas oculto de audio para recordar el instrumento de cada trazo -->
         <canvas id="audioCanvas" width="500" height="500" style="display:none;"></canvas>
     </div>
 
@@ -161,8 +161,6 @@
             if (history.length > 20) history.shift();
         }
 
-        // Mapeo de herramientas a tipos de onda y colores clave cifrados para el canvas de audio
-        // Usamos colores únicos en el canal Rojo (R) para identificar qué instrumento tocó cada píxel
         const toolAudioMap = {
             lapiz:   { type: 'sine',     audioColor: 'rgb(10, 0, 0)' },
             crayon:  { type: 'triangle', audioColor: 'rgb(20, 0, 0)' },
@@ -176,7 +174,9 @@
             menor: [130.81, 155.56, 174.61, 196.00, 233.08, 261.63, 311.13, 349.23, 392.00, 466.16, 523.25]
         };
 
-        // Inicializar canvas de audio con fondo blanco puro
+        // Inicializar ambos canvas en blanco puro
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
         audioCtx2D.fillStyle = '#ffffff';
         audioCtx2D.fillRect(0, 0, audioCanvas.width, audioCanvas.height);
         saveState();
@@ -224,14 +224,12 @@
             const size = parseInt(document.getElementById('sizeRange').value);
             const toolInfo = toolAudioMap[currentTool];
 
-            // 1. Dibujar en el Canvas Visual (con el color elegido por el usuario)
             ctx.lineWidth = size;
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
             ctx.strokeStyle = color;
             ctx.fillStyle = color;
 
-            // 2. Dibujar en el Canvas Oculto de Audio (con el color técnico que guarda la herramienta)
             audioCtx2D.lineWidth = size;
             audioCtx2D.lineCap = 'round';
             audioCtx2D.lineJoin = 'round';
@@ -254,32 +252,25 @@
             } else if (currentTool === 'crayon') {
                 ctx.globalAlpha = 0.5;
                 audioCtx2D.globalAlpha = 0.5;
-                
                 drawLine(ctx, lastX, lastY, pos.x, pos.y);
                 drawLine(audioCtx2D, lastX, lastY, pos.x, pos.y);
-                
                 ctx.globalAlpha = 1.0;
                 audioCtx2D.globalAlpha = 1.0;
             } else if (currentTool === 'pincel') {
                 ctx.globalAlpha = 0.3;
                 audioCtx2D.globalAlpha = 0.3;
-                
                 ctx.lineWidth = size * 1.8;
                 audioCtx2D.lineWidth = size * 1.8;
-                
                 drawLine(ctx, lastX, lastY, pos.x, pos.y);
                 drawLine(audioCtx2D, lastX, lastY, pos.x, pos.y);
-                
                 ctx.globalAlpha = 1.0;
                 audioCtx2D.globalAlpha = 1.0;
             } else if (currentTool === 'fibra') {
                 ctx.lineWidth = size * 1.2;
                 audioCtx2D.lineWidth = size * 1.2;
-                
                 drawLine(ctx, lastX, lastY, pos.x, pos.y);
                 drawLine(audioCtx2D, lastX, lastY, pos.x, pos.y);
             } else {
-                // Lápiz
                 drawLine(ctx, lastX, lastY, pos.x, pos.y);
                 drawLine(audioCtx2D, lastX, lastY, pos.x, pos.y);
             }
@@ -318,7 +309,8 @@
 
         document.getElementById('clearBtn').addEventListener('click', () => {
             saveState();
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
             audioCtx2D.fillStyle = '#ffffff';
             audioCtx2D.fillRect(0, 0, audioCanvas.width, audioCanvas.height);
         });
@@ -336,10 +328,11 @@
             playBtn.textContent = isPlaying ? '⏸ Pausa' : '▶ Play';
         });
 
-        let drawingCache = document.createElement('canvas');
-        drawingCache.width = canvas.width;
-        drawingCache.height = canvas.height;
-        let cacheCtx = drawingCache.getContext('2d');
+        // Guardamos una copia limpia permanente del dibujo para que la línea no lo borre
+        let cleanDrawing = document.createElement('canvas');
+        cleanDrawing.width = canvas.width;
+        cleanDrawing.height = canvas.height;
+        let cleanCtx = cleanDrawing.getContext('2d');
 
         function animate() {
             requestAnimationFrame(animate);
@@ -350,37 +343,37 @@
             scanX += speed;
             if (scanX > canvas.width) scanX = 0;
 
-            cacheCtx.clearRect(0, 0, canvas.width, canvas.height);
-            cacheCtx.drawImage(canvas, 0, 0);
+            // Actualizamos la copia limpia del canvas principal
+            cleanCtx.clearRect(0, 0, canvas.width, canvas.height);
+            cleanCtx.drawImage(canvas, 0, 0);
 
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(drawingCache, 0, 0);
+            // 1. Restauramos el dibujo original limpio de fondo
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(cleanDrawing, 0, 0);
 
-            // Línea roja de escaneo
-            ctx.strokeStyle = '#ff4757';
+            // 2. Dibujamos ENCIMA la línea vertical negra semi-transparente de escaneo
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)'; // Línea negra finita con opacidad
             ctx.lineWidth = 2;
             ctx.beginPath();
             ctx.moveTo(scanX, 0);
             ctx.lineTo(scanX, canvas.height);
             ctx.stroke();
 
+            // 3. Escuchamos y disparamos el audio de los píxeles en esta columna exactos
             checkColumnAndPlay(scanX);
         }
 
         function checkColumnAndPlay(x) {
             const colIndex = Math.floor(x);
-            // Escaneamos el canvas oculto de audio para detectar qué herramienta dibujó cada píxel
             const imgData = audioCtx2D.getImageData(colIndex, 0, 1, audioCanvas.height);
             const data = imgData.data;
 
             for (let y = 0; y < audioCanvas.height; y += 6) {
-                const r = data[(y * 4)];     // Canal rojo codifica el tipo de instrumento
+                const r = data[(y * 4)];
                 const g = data[(y * 4) + 1];
                 const b = data[(y * 4) + 2];
                 const alpha = data[(y * 4) + 3];
 
-                // Si hay un trazo válido (no es blanco puro)
                 if (alpha > 40 && (r > 0 || g > 0 || b > 0)) {
                     let detectedTool = 'lapiz';
                     if (r === 20) detectedTool = 'crayon';
