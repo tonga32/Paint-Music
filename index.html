@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paint Musical Pentatónico</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #1e1e2f;
+            color: #fff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 { margin-bottom: 5px; font-size: 1.8rem; }
+        p { margin-top: 0; color: #a0a0c0; }
+        #controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+            background: #2a2a40;
+            padding: 10px 20px;
+            border-radius: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        button, select {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 5px;
+            background: #4e4efc;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        button:hover, select:hover { background: #3b3bfc; }
+        button.active { background: #ff7675; }
+        canvas {
+            background: #111118;
+            border: 3px solid #3a3a5c;
+            border-radius: 10px;
+            cursor: crosshair;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.5);
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Paint Musical Pentatónico</h1>
+    <p>Dibujá en el lienzo. La línea de reproducción escaneará tu arte y tocará notas musicales.</p>
+
+    <div id="controls">
+        <label>Herramienta:</label>
+        <button class="tool-btn active" data-tool="lapiz">Lápiz</button>
+        <button class="tool-btn" data-tool="crayon">Crayón</button>
+        <button class="tool-btn" data-tool="fibra">Fibra</button>
+        <button class="tool-btn" data-tool="pincel">Pincel</button>
+        <button class="tool-btn" data-tool="aerosol">Aerosol</button>
+
+        <label>Escala:</label>
+        <select id="scaleSelect">
+            <option value="mayor">Pentatónica Mayor</option>
+            <option value="menor">Pentatónica Menor</option>
+        </select>
+
+        <button id="playBtn">▶ Reproducir / Pausar</button>
+        <button id="clearBtn">🗑 Borrar</button>
+    </div>
+
+    <canvas id="canvas" width="800" height="500"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        let isDrawing = false;
+        let currentTool = 'lapiz';
+        let isPlaying = false;
+        let scanX = 0;
+        let audioCtx = null;
+
+        // Configuración de herramientas (grosor y opacidad/estilo)
+        const toolSettings = {
+            lapiz: { width: 2, alpha: 1, type: 'sine' },
+            crayon: { width: 8, alpha: 0.7, type: 'triangle' },
+            fibra: { width: 4, alpha: 1, type: 'sawtooth' },
+            pincel: { width: 14, alpha: 0.5, type: 'sine' },
+            aerosol: { width: 20, alpha: 0.3, type: 'square' }
+        };
+
+        // Escalas pentatónicas en frecuencias (Hz) - Base C (Do)
+        const scales = {
+            mayor: [130.81, 146.83, 164.81, 196.00, 220.00, 261.63, 293.66, 329.63, 392.00, 440.00, 523.25],
+            menor: [130.81, 155.56, 174.61, 196.00, 233.08, 261.63, 311.13, 349.23, 392.00, 466.16, 523.25]
+        };
+
+        // Eventos de selección de herramientas
+        document.querySelectorAll('.tool-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                currentTool = e.target.dataset.tool;
+            });
+        });
+
+        // Dibujo con Mouse
+        canvas.addEventListener('mousedown', startDraw);
+        canvas.addEventListener('mousemove', draw);
+        window.addEventListener('mouseup', stopDraw);
+
+        function startDraw(e) {
+            isDrawing = true;
+            draw(e);
+        }
+
+        function draw(e) {
+            if (!isDrawing) return;
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            const settings = toolSettings[currentTool];
+
+            ctx.lineWidth = settings.width;
+            ctx.lineCap = 'round';
+            ctx.strokeStyle = `rgba(255, 255, 255, ${settings.alpha})`;
+
+            if (currentTool === 'aerosol') {
+                // Efecto spray disperso
+                for (let i = 0; i < 15; i++) {
+                    const offsetX = (Math.random() - 0.5) * settings.width * 2;
+                    const offsetY = (Math.random() - 0.5) * settings.width * 2;
+                    ctx.fillStyle = `rgba(255, 255, 255, ${settings.alpha})`;
+                    ctx.fillRect(x + offsetX, y + offsetY, 2, 2);
+                }
+            } else {
+                ctx.lineTo(x, y);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+            }
+        }
+
+        function stopDraw() {
+            isDrawing = false;
+            ctx.beginPath();
+        }
+
+        // Botón Borrar
+        document.getElementById('clearBtn').addEventListener('click', () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        });
+
+        // Control de Reproducción
+        const playBtn = document.getElementById('playBtn');
+        playBtn.addEventListener('click', () => {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            isPlaying = !isPlaying;
+            playBtn.classList.toggle('active', isPlaying);
+            playBtn.textContent = isPlaying ? '⏸ Pausar' : '▶ Reproducir / Pausar';
+        });
+
+        // Loop de Animación y Escaneo
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (!isPlaying) return;
+
+            // Limpiar visualización previa guardando el dibujo actual
+            // Nota: Para simplificar el loop en este ejemplo nativo, redibujamos la línea de scan encima
+            // (Idealmente se guarda una imagen de fondo, pero aquí funciona perfecto para prototipo).
+            
+            // Avanzar línea de escaneo
+            scanX += 2;
+            if (scanX > canvas.width) scanX = 0;
+
+            // Analizar columna del canvas en la posición actual de scanX
+            checkColumnAndPlay(scanX);
+        }
+
+        // Analizador de píxeles y disparador de sonido
+        function checkColumnAndPlay(x) {
+            const colIndex = Math.floor(x);
+            // Tomamos una muestra vertical de píxeles en la columna actual
+            const imgData = ctx.getImageData(colIndex, 0, 1, canvas.height);
+            const data = imgData.data;
+
+            for (let y = 0; y < canvas.height; y += 4) { // Saltamos de a 4px por rendimiento
+                const alphaIndex = (y * 4) + 3; // Canal alfa del pixel
+                const alpha = data[alphaIndex];
+
+                if (alpha > 50) { // Si hay dibujo en este punto
+                    // Mapear la altura (Y) a una nota de la escala pentatónica
+                    const scaleType = document.getElementById('scaleSelect').value;
+                    const currentScale = scales[scaleType];
+                    
+                    // Invertimos Y porque el canvas empieza arriba con 0
+                    const noteIndex = Math.floor(((canvas.height - y) / canvas.height) * currentScale.length);
+                    const frequency = currentScale[Math.min(noteIndex, currentScale.length - 1)];
+
+                    // Intensidad basada en qué tan "grueso" o denso detectamos (usamos alpha o grosor aproximado)
+                    const intensity = alpha / 255;
+
+                    playTone(frequency, intensity, currentTool);
+                }
+            }
+        }
+
+        // Sintetizador de audio por instrumento (Timbre)
+        function playTone(freq, intensity, tool) {
+            if (!audioCtx) return;
+
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+
+            // Asignar tipo de onda según herramienta elegida
+            osc.type = toolSettings[tool].type;
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+
+            // Volumen condicionado por la intensidad del trazo
+            const baseGain = 0.05 * intensity;
+            gainNode.gain.setValueAtTime(baseGain, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.15);
+
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.15);
+        }
+
+        // Iniciar loop
+        animate();
+    </script>
+</body>
+</html>
