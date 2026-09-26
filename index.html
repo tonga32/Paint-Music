@@ -29,7 +29,7 @@
             align-items: center;
             flex-wrap: wrap;
             justify-content: center;
-            max-width: 540px;
+            max-width: 580px;
         }
         .control-group {
             display: flex;
@@ -104,7 +104,7 @@
 <body>
 
     <h1>Paint Musical & TR-909 PRO</h1>
-    <p>¡Dibuja melodías y percusiones! Ahora con pre-escucha al tocar.</p>
+    <p>¡Dibuja melodías y percusiones! Lee de izquierda a derecha.</p>
 
     <div id="controls">
         <div class="control-group">
@@ -120,7 +120,7 @@
             <button class="tool-btn" data-tool="hihat" title="Hi-Hat (Triángulo)">🔺</button>
             <button class="tool-btn" data-tool="snare" title="Snare Seco (Cuadrado)">⬜</button>
             <button class="tool-btn" data-tool="clap" title="Clap House (Diamante)">👏</button>
-            <button class="tool-btn" data-tool="goma" title="Borrar (Borra dibujo y limpia percusiones)">❌</button>
+            <button class="tool-btn" data-tool="goma" title="Borrar">❌</button>
         </div>
 
         <div class="control-group">
@@ -130,6 +130,14 @@
         <div class="control-group">
             <label>Grosor:</label>
             <input type="range" id="sizeRange" min="1" max="25" value="4">
+        </div>
+
+        <div class="control-group">
+            <label>Escala:</label>
+            <select id="scaleSelect">
+                <option value="menor" selected>Menor</option>
+                <option value="mayor">Mayor</option>
+            </select>
         </div>
 
         <div class="control-group">
@@ -184,7 +192,7 @@
         let drumSequence = Array(STEPS).fill(null).map(() => ([]));
         let history = [];
 
-        // Dibuja la grilla una sola vez
+        // Dibuja la grilla
         gridCtx.strokeStyle = 'rgba(200, 200, 220, 0.7)';
         gridCtx.lineWidth = 1;
         gridCtx.setLineDash([4, 4]);
@@ -197,7 +205,6 @@
             gridCtx.beginPath(); gridCtx.moveTo(0, y); gridCtx.lineTo(gridCanvas.width, y); gridCtx.stroke();
         }
 
-        // --- SISTEMA DE AUDIO BLINDADO ---
         function initAudio() {
             if (audioCtx) {
                 if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -206,7 +213,6 @@
             const AudioContext = window.AudioContext || window.webkitAudioContext;
             audioCtx = new AudioContext();
             
-            // Limitador suave para proteger el volumen sin ahogarlo
             masterCompressor = audioCtx.createDynamicsCompressor();
             masterCompressor.threshold.value = -3;
             masterCompressor.knee.value = 10;
@@ -223,7 +229,6 @@
             if (audioCtx.state === 'suspended') audioCtx.resume();
         }
 
-        // Iniciar audio en el primer toque a la pantalla (Evita bloqueos del navegador)
         window.addEventListener('mousedown', initAudio, { once: true });
         window.addEventListener('touchstart', initAudio, { once: true });
 
@@ -291,7 +296,7 @@
 
         function startDown(e) {
             e.preventDefault();
-            initAudio(); // Activa el audio sí o sí
+            initAudio(); 
 
             const pos = getPos(e);
             const isPercussion = ['kick', 'hihat', 'snare', 'clap'].includes(currentTool);
@@ -306,8 +311,6 @@
                 if (!drumSequence[q.col].some(d => d.row === q.row && d.tool === currentTool)) {
                     drumSequence[q.col].push({ tool: currentTool, row: q.row });
                     drawShape(q.x, q.y, currentTool);
-                    
-                    // PRE-ESCUCHA: Reproduce el sonido apenas lo dibujás
                     playPercussion(currentTool, 1.0);
                 }
             } else if (currentTool === 'goma') {
@@ -325,7 +328,6 @@
             const size = parseInt(document.getElementById('sizeRange').value);
 
             if (currentTool === 'goma') {
-                // Borrar gráfico visible
                 ctx.save();
                 ctx.beginPath();
                 ctx.arc(pos.x, pos.y, size * 1.5, 0, Math.PI * 2);
@@ -333,17 +335,15 @@
                 ctx.fill(); 
                 ctx.restore();
 
-                // Borrar rastro de audio (Arreglado)
                 audioCtx2D.save();
                 audioCtx2D.beginPath();
                 audioCtx2D.arc(pos.x, pos.y, size * 1.5, 0, Math.PI * 2);
                 audioCtx2D.globalCompositeOperation = 'destination-out';
                 audioCtx2D.fillStyle = 'rgba(0,0,0,1)';
                 audioCtx2D.fill();
-                audioCtx2D.globalCompositeOperation = 'source-over'; // Reseteo de seguridad
+                audioCtx2D.globalCompositeOperation = 'source-over';
                 audioCtx2D.restore();
                 
-                // Borrar percusiones si las tocás
                 const q = quantizePos(pos.x, pos.y);
                 let deletedDrum = false;
                 
@@ -466,7 +466,7 @@
 
         const playBtn = document.getElementById('playBtn');
         playBtn.addEventListener('click', () => {
-            initAudio(); // Asegura el audio
+            initAudio(); 
             
             isPlaying = !isPlaying;
             playBtn.classList.toggle('active', isPlaying);
@@ -490,10 +490,9 @@
             const percent = (scanX / canvas.width) * 100;
             scanLine.style.left = percent + '%';
 
-            // 1. Lee Dibujos Continuos (Melodías)
+            // Como agregamos scaleSelect, esta línea ya no falla
             checkColumnAndPlay(scanX);
 
-            // 2. Lee las Percusiones desde el Secuenciador
             const currentStep = Math.floor(scanX / (canvas.width / STEPS));
             if (currentStep !== lastStep && currentStep >= 0 && currentStep < STEPS) {
                 lastStep = currentStep;
@@ -509,7 +508,7 @@
 
             const imgData = audioCtx2D.getImageData(colIndex, 0, 1, audioCanvas.height);
             const data = imgData.data;
-            const scaleType = document.getElementById('scaleSelect').value;
+            const scaleType = document.getElementById('scaleSelect').value || 'menor';
             const currentScale = scales[scaleType];
             const continuousTargets = { lapiz: new Map(), crayon: new Map(), fibra: new Map(), pincel: new Map() };
             const currentOneShots = new Map(); 
@@ -705,7 +704,6 @@
                 
                 const gain = audioCtx.createGain();
                 
-                // Síntesis corregida sin doble asignación en el mismo tiempo
                 gain.gain.setValueAtTime(0.8 * volMultiplier, now);
                 gain.gain.exponentialRampToValueAtTime(0.001, now + 0.02);
                 gain.gain.setValueAtTime(0.9 * volMultiplier, now + 0.02);
