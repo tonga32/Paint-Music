@@ -71,6 +71,7 @@
             border-radius: 10px;
             overflow: hidden;
             border: 3px solid #3a3a5c;
+            background: #ffffff;
         }
 
         canvas {
@@ -79,15 +80,26 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: #ffffff;
             cursor: crosshair;
+        }
+
+        /* Línea vertical de escaneo por CSS (no altera los píxeles del dibujo) */
+        #scanLine {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 2px;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.4);
+            pointer-events: none;
+            display: none;
         }
     </style>
 </head>
 <body>
 
     <h1>Paint Musical Pentatónico</h1>
-    <p>Dibujá con tus herramientas y dale Play.</p>
+    <p>Dibujá y dale Play para escanear tus trazos.</p>
 
     <div id="controls">
         <div class="control-group">
@@ -132,10 +144,12 @@
     </div>
 
     <div class="canvas-container">
-        <!-- Canvas principal de dibujo -->
+        <!-- Canvas principal visual limpio -->
         <canvas id="canvas" width="500" height="500"></canvas>
-        <!-- Canvas oculto de audio para recordar el instrumento de cada trazo -->
+        <!-- Canvas oculto de audio para identificar el instrumento de cada trazo -->
         <canvas id="audioCanvas" width="500" height="500" style="display:none;"></canvas>
+        <!-- Línea de escaneo visual -->
+        <div id="scanLine"></div>
     </div>
 
     <script>
@@ -145,6 +159,8 @@
         const audioCanvas = document.getElementById('audioCanvas');
         const audioCtx2D = audioCanvas.getContext('2d');
         
+        const scanLine = document.getElementById('scanLine');
+
         let isDrawing = false;
         let currentTool = 'lapiz';
         let isPlaying = false;
@@ -326,13 +342,8 @@
             isPlaying = !isPlaying;
             playBtn.classList.toggle('active', isPlaying);
             playBtn.textContent = isPlaying ? '⏸ Pausa' : '▶ Play';
+            scanLine.style.display = isPlaying ? 'block' : 'none';
         });
-
-        // Guardamos una copia limpia permanente del dibujo para que la línea no lo borre
-        let cleanDrawing = document.createElement('canvas');
-        cleanDrawing.width = canvas.width;
-        cleanDrawing.height = canvas.height;
-        let cleanCtx = cleanDrawing.getContext('2d');
 
         function animate() {
             requestAnimationFrame(animate);
@@ -343,28 +354,18 @@
             scanX += speed;
             if (scanX > canvas.width) scanX = 0;
 
-            // Actualizamos la copia limpia del canvas principal
-            cleanCtx.clearRect(0, 0, canvas.width, canvas.height);
-            cleanCtx.drawImage(canvas, 0, 0);
+            // Mover la línea visualmente de forma fluida adaptada al tamaño del contenedor
+            const percent = (scanX / canvas.width) * 100;
+            scanLine.style.left = percent + '%';
 
-            // 1. Restauramos el dibujo original limpio de fondo
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(cleanDrawing, 0, 0);
-
-            // 2. Dibujamos ENCIMA la línea vertical negra semi-transparente de escaneo
-            ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)'; // Línea negra finita con opacidad
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(scanX, 0);
-            ctx.lineTo(scanX, canvas.height);
-            ctx.stroke();
-
-            // 3. Escuchamos y disparamos el audio de los píxeles en esta columna exactos
+            // Escanear los píxeles actuales y disparar sonido
             checkColumnAndPlay(scanX);
         }
 
         function checkColumnAndPlay(x) {
             const colIndex = Math.floor(x);
+            if (colIndex >= audioCanvas.width) return;
+
             const imgData = audioCtx2D.getImageData(colIndex, 0, 1, audioCanvas.height);
             const data = imgData.data;
 
