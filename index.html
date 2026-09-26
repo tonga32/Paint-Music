@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Paint Musical - Drums Pro & Glissando</title>
+    <title>Paint Musical - Drums Pro & Continuous Lines</title>
     <style>
         body {
             margin: 0;
@@ -99,7 +99,7 @@
 <body>
 
     <h1>Paint Musical & TR-909 PRO</h1>
-    <p>Drums puros sin notas fantasmas, Glissando y Limitador.</p>
+    <p>Líneas continuas perfectas y percusión sólida (1 golpe = 1 sonido).</p>
 
     <div id="controls">
         <div class="control-group">
@@ -174,6 +174,9 @@
         
         let continuousTones = {}; 
         let oneShotTones = {};
+        
+        // Estado de batería para evitar doble disparos (1 golpe por figura)
+        let drumReadingState = { kick: false, hihat: false, snare: false };
         
         let history = [];
 
@@ -342,6 +345,7 @@
             saveState();
             ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
             audioCtx2D.clearRect(0, 0, audioCanvas.width, audioCanvas.height);
+            drumReadingState = { kick: false, hihat: false, snare: false };
         });
 
         function stopAllActiveTones() {
@@ -352,6 +356,7 @@
             }
             continuousTones = {};
             oneShotTones = {};
+            drumReadingState = { kick: false, hihat: false, snare: false };
         }
 
         const playBtn = document.getElementById('playBtn');
@@ -410,17 +415,18 @@
             const currentScale = scales[scaleType];
             
             const continuousTargets = { lapiz: new Map(), crayon: new Map(), fibra: new Map(), pincel: new Map() };
-            const currentOneShots = new Map();
+            const currentOneShots = new Map(); // Solo para aerosol
+            
+            let drumsInColumn = { kick: 0, hihat: 0, snare: 0 };
 
             for (let y = 0; y < audioCanvas.height; y += 8) {
                 const r = data[(y * 4)];
                 const g = data[(y * 4) + 1]; 
                 const alpha = data[(y * 4) + 3];
 
-                // SOLUCIÓN ANTI-ALIASING: Filtramos pixeles difuminados y redondeamos los colores 
-                // para evitar lecturas "fantasma" que generaban melodías accidentales.
-                if (alpha > 150) {
-                    const rSnap = Math.round(r / 10) * 10; // Fuerza valores a 10, 20, 30, etc.
+                // Bajamos el umbral alpha a 15 para no perder los bordes difuminados de las líneas rápidas
+                if (alpha > 15) {
+                    const rSnap = Math.round(r / 10) * 10; 
 
                     if (rSnap >= 10 && rSnap <= 80) {
                         let tool = 'lapiz';
@@ -442,15 +448,12 @@
                             } else {
                                 continuousTargets[tool].set(noteIndex, Math.max(continuousTargets[tool].get(noteIndex), intensity));
                             }
-                        } else {
-                            // Para percusión usamos el índice de la nota solo para agrupar por píxel, 
-                            // pero la síntesis de sonido será independiente de la altura.
+                        } else if (tool === 'aerosol') {
                             const key = `${tool}_${noteIndex}`;
-                            if (!currentOneShots.has(key)) {
-                                currentOneShots.set(key, intensity);
-                            } else {
-                                currentOneShots.set(key, Math.max(currentOneShots.get(key), intensity));
-                            }
+                            if (!currentOneShots.has(key)) currentOneShots.set(key, intensity);
+                        } else if (['kick', 'hihat', 'snare'].includes(tool)) {
+                            // Agrupamos la batería leída en esta columna, sin importar su altura Y
+                            drumsInColumn[tool] = Math.max(drumsInColumn[tool], intensity);
                         }
                     }
                 }
@@ -458,7 +461,7 @@
 
             const now = audioCtx.currentTime;
 
-            // --- SISTEMA DE GLISSANDO (PORTAMENTO) PARA MELODÍAS ---
+            // --- SISTEMA CONTINUO CON "TOLERANCIA" PARA LÍNEAS PERFECTAS ---
             for (const tool in continuousTargets) {
                 let targets = Array.from(continuousTargets[tool].entries()).map(([noteIdx, intensity]) => {
                     return { freq: currentScale[Math.min(noteIdx, currentScale.length - 1)], intensity };
@@ -477,65 +480,74 @@
                         let oscObj = active[i];
                         let target = targets[i];
                         
-                        oscObj.osc.frequency.cancelScheduledValues(now);
+                        oscObj.missingFrames = 0; // Se encontró, reseteamos las faltas
                         oscObj.osc.frequency.setTargetAtTime(target.freq, now, 0.05);
                         
-                        oscObj.gainNode.gain.cancelScheduledValues(now);
                         const vol = 0.2 * target.intensity;
                         oscObj.gainNode.gain.setTargetAtTime(vol, now, 0.03);
-                        
                         oscObj.freq = target.freq;
                         nextActive.push(oscObj);
                     } else if (i < targets.length) {
                         let target = targets[i];
                         let oscObj = startContinuousTone(target.freq, target.intensity, tool);
                         oscObj.freq = target.freq;
+                        oscObj.missingFrames = 0;
                         nextActive.push(oscObj);
                     } else if (i < active.length) {
-                        stopContinuousTone(active[i]);
+                        // GRACE PERIOD (Tolerancia): Si hay micro-cortes, mantiene el sonido unos frames
+                        let oscObj = active[i];
+                        oscObj.missingFrames = (oscObj.missingFrames || 0) + 1;
+                        if (oscObj.missingFrames > 8) { // Aprox 130ms de tolerancia antes de cortar
+                            stopContinuousTone(oscObj);
+                        } else {
+                            nextActive.push(oscObj); // Lo mantenemos vivo en memoria
+                        }
                     }
                 }
                 continuousTones[tool] = nextActive;
             }
 
-            // --- SISTEMA DE ONE-SHOTS (BATERÍA) LIMPIOS ---
+            // --- SISTEMA DE BATERÍA (ONE SHOT GARANTIZADO) ---
+            for (const drum of ['kick', 'hihat', 'snare']) {
+                if (drumsInColumn[drum] > 0) {
+                    if (!drumReadingState[drum]) {
+                        // Es la primera vez que el láser toca el borde izquierdo de la figura
+                        playPercussion(drum, drumsInColumn[drum]);
+                        drumReadingState[drum] = true; // Se bloquea hasta salir del dibujo
+                    }
+                } else {
+                    // El láser ya salió por la derecha del dibujo, liberamos el instrumento
+                    drumReadingState[drum] = false;
+                }
+            }
+
+            // --- AEROSOL (Mantiene sistema viejo por alturas) ---
             for (const [key, intensity] of currentOneShots.entries()) {
                 if (!oneShotTones[key]) {
                     const [toolStr, noteIdxStr] = key.split('_');
                     const noteIndex = parseInt(noteIdxStr);
                     const freq = currentScale[Math.min(noteIndex, currentScale.length - 1)];
-
-                    if (toolStr === 'kick' || toolStr === 'hihat' || toolStr === 'snare') {
-                        playPercussion(toolStr, intensity); // Suena igual sin importar "freq"
-                    } else if (toolStr === 'aerosol') {
-                        playShortTone(freq, intensity, toolStr);
-                    }
+                    playShortTone(freq, intensity, toolStr);
                     oneShotTones[key] = true; 
                 }
             }
-
             for (const key in oneShotTones) {
-                if (!currentOneShots.has(key)) {
-                    delete oneShotTones[key]; 
-                }
+                if (!currentOneShots.has(key)) delete oneShotTones[key]; 
             }
         }
 
         function startContinuousTone(freq, intensity, tool) {
             const osc = audioCtx.createOscillator();
             const gainNode = audioCtx.createGain();
-
             osc.type = toolAudioMap[tool].type;
             osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-
             const baseGain = 0.2 * intensity; 
             gainNode.gain.setValueAtTime(0.0001, audioCtx.currentTime);
             gainNode.gain.exponentialRampToValueAtTime(baseGain, audioCtx.currentTime + 0.05);
-
             osc.connect(gainNode);
             gainNode.connect(masterGain); 
             osc.start();
-            return { osc, gainNode, freq };
+            return { osc, gainNode, freq, missingFrames: 0 };
         }
 
         function stopContinuousTone(toneObj) {
@@ -557,10 +569,8 @@
             const baseGain = 0.15 * intensity;
             gainNode.gain.setValueAtTime(baseGain, audioCtx.currentTime);
             gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.15);
-            osc.connect(gainNode);
-            gainNode.connect(masterGain);
-            osc.start();
-            osc.stop(audioCtx.currentTime + 0.15);
+            osc.connect(gainNode); gainNode.connect(masterGain);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.15);
         }
 
         function playPercussion(type, intensity = 1.0) {
@@ -570,20 +580,15 @@
                 const volMultiplier = Math.min(intensity, 1.5);
 
                 if (type === 'kick') {
-                    // Bombo mejorado: Senoidal con barrido rápido de frecuencia (Física clásica de Drum Machine)
                     const osc = audioCtx.createOscillator();
                     const gain = audioCtx.createGain();
                     osc.type = 'sine';
                     osc.frequency.setValueAtTime(150, now);
-                    osc.frequency.exponentialRampToValueAtTime(40, now + 0.08); // Caída rápida
-                    
-                    gain.gain.setValueAtTime(1.5 * volMultiplier, now); // Ataque fuerte
+                    osc.frequency.exponentialRampToValueAtTime(40, now + 0.08); 
+                    gain.gain.setValueAtTime(1.5 * volMultiplier, now); 
                     gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
-                    
-                    osc.connect(gain);
-                    gain.connect(masterGain);
-                    osc.start(now);
-                    osc.stop(now + 0.45);
+                    osc.connect(gain); gain.connect(masterGain);
+                    osc.start(now); osc.stop(now + 0.45);
 
                 } else if (type === 'hihat') {
                     const bufferSize = audioCtx.sampleRate * 0.05;
@@ -601,9 +606,6 @@
                     noise.start(now);
 
                 } else if (type === 'snare') {
-                    // Snare mejorado: Cuerpo tonal (triangle) más corto + Ruido blanco filtrado 
-                    
-                    // Cuerpo
                     const osc = audioCtx.createOscillator();
                     const oscGain = audioCtx.createGain();
                     osc.type = 'triangle';
@@ -614,7 +616,6 @@
                     osc.connect(oscGain); oscGain.connect(masterGain);
                     osc.start(now); osc.stop(now + 0.25);
 
-                    // Ruido
                     const bufferSize = audioCtx.sampleRate * 0.25;
                     const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
                     const output = buffer.getChannelData(0);
