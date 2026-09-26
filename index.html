@@ -102,11 +102,11 @@
 
     <div id="controls">
         <div class="control-group">
-            <button class="tool-btn active" data-tool="lapiz" title="Lápiz">✏️</button>
-            <button class="tool-btn" data-tool="crayon" title="Crayón">🖍️</button>
-            <button class="tool-btn" data-tool="fibra" title="Fibra">✒️</button>
-            <button class="tool-btn" data-tool="pincel" title="Pincel">🖌️</button>
-            <button class="tool-btn" data-tool="aerosol" title="Spray">💨</button>
+            <button class="tool-btn active" data-tool="lapiz" title="Lápiz (Sintetizador Suave)">✏️</button>
+            <button class="tool-btn" data-tool="crayon" title="Crayón (Cajita de Música)">🖍️</button>
+            <button class="tool-btn" data-tool="fibra" title="Fibra (Sintetizador Brillante)">✒️</button>
+            <button class="tool-btn" data-tool="pincel" title="Pincel (Flauta Dulce)">🖌️</button>
+            <button class="tool-btn" data-tool="aerosol" title="Spray (Chiptune 8-bit)">💨</button>
         </div>
 
         <div class="control-group">
@@ -173,13 +173,13 @@
             if (history.length > 20) history.shift();
         }
 
-        // Definimos códigos de canal rojo únicos para cada instrumento (valores exactos 10, 20, 30, 40, 50)
+        // Mapeo de herramientas con nuevos tipos de onda más ricos e interesantes
         const toolAudioMap = {
-            lapiz:   { type: 'sine',     audioRed: 10 },
-            crayon:  { type: 'triangle', audioRed: 20 },
-            fibra:   { type: 'sawtooth', audioRed: 30 },
-            pincel:  { type: 'sine',     audioRed: 40 },
-            aerosol: { type: 'square',   audioRed: 50 }
+            lapiz:   { type: 'sine',     audioRed: 10, desc: 'Suave' },
+            crayon:  { type: 'triangle', audioRed: 20, desc: 'Cajita de música' },
+            fibra:   { type: 'sawtooth', audioRed: 30, desc: 'Brillante' },
+            pincel:  { type: 'sine',     audioRed: 40, desc: 'Flauta' },
+            aerosol: { type: 'square',   audioRed: 50, desc: '8-bit' }
         };
 
         const scales = {
@@ -187,11 +187,8 @@
             menor: [130.81, 155.56, 174.61, 196.00, 233.08, 261.63, 311.13, 349.23, 392.00, 466.16, 523.25]
         };
 
-        // Canvas principal blanco
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        // Canvas de audio transparente (limpio por completo)
         audioCtx2D.clearRect(0, 0, audioCanvas.width, audioCanvas.height);
         saveState();
 
@@ -369,7 +366,6 @@
                 const r = data[(y * 4)];
                 const alpha = data[(y * 4) + 3];
 
-                // Solo suena si el píxel tiene opacidad real y coincide exactamente con un código de instrumento válido
                 if (alpha > 20 && (r === 10 || r === 20 || r === 30 || r === 40 || r === 50)) {
                     let detectedTool = 'lapiz';
                     if (r === 20) detectedTool = 'crayon';
@@ -384,7 +380,7 @@
                     const frequency = currentScale[Math.min(noteIndex, currentScale.length - 1)];
 
                     const currentSize = parseInt(document.getElementById('sizeRange').value);
-                    const intensity = Math.min(currentSize / 10, 1.5);
+                    const intensity = Math.min(currentSize / 8, 1.8);
 
                     playTone(frequency, intensity, detectedTool);
                 }
@@ -398,18 +394,20 @@
                 const osc = audioCtx.createOscillator();
                 const gainNode = audioCtx.createGain();
 
+                // Asignamos la onda característica de cada herramienta
                 osc.type = toolAudioMap[tool].type;
                 osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
 
-                const baseGain = 0.02 * intensity;
+                // Ganancia optimizada con mayor volumen y cuerpo
+                const baseGain = 0.08 * intensity; 
                 gainNode.gain.setValueAtTime(baseGain, audioCtx.currentTime);
-                gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.15);
+                gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.22);
 
                 osc.connect(gainNode);
                 gainNode.connect(audioCtx.destination);
 
                 osc.start();
-                osc.stop(audioCtx.currentTime + 0.15);
+                osc.stop(audioCtx.currentTime + 0.22);
             } catch (e) {}
         }
 
