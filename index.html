@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Paint Musical - Drums Pro & Grid Fix</title>
+    <title>Paint Musical - TR-909 PRO Definitive</title>
     <style>
         body {
             margin: 0;
@@ -99,7 +99,7 @@
 <body>
 
     <h1>Paint Musical & TR-909 PRO</h1>
-    <p>Dibujo libre melódico + Grilla rítmica cuantizada instantánea.</p>
+    <p>Dibujo libre melódico + Grilla y cuantizador automático de percusiones.</p>
 
     <div id="controls">
         <div class="control-group">
@@ -206,17 +206,31 @@
             menor: [130.81, 155.56, 174.61, 196.00, 233.08, 261.63, 311.13, 349.23, 392.00, 466.16, 523.25]
         };
 
-        function drawBackgroundAndGrid() {
+        // Redibuja completamente el lienzo: Fondo blanco + Trazos limpios del usuario + Grilla (si está activa)
+        function renderScene() {
+            // 1. Fondo blanco puro
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+            // 2. Restauramos los trazos del usuario desde el historial actual (si existe)
+            if (history.length > 0) {
+                const currentState = history[history.length - 1];
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = canvas.width;
+                tempCanvas.height = canvas.height;
+                const tempCtx = tempCanvas.getContext('2d');
+                tempCtx.putImageData(currentState.main, 0, 0);
+                ctx.drawImage(tempCanvas, 0, 0);
+            }
+
+            // 3. Dibujamos la grilla por encima si está activada
             if (showGrid) {
                 ctx.save();
-                ctx.strokeStyle = '#2d2d3a'; // Líneas negras visibles
+                ctx.strokeStyle = '#2d2d3a'; 
                 ctx.lineWidth = 1;
                 ctx.setLineDash([3, 3]);
 
-                // 16 pasos verticales rítmicos
+                // 16 pasos verticales rítmicos exactos
                 for (let i = 1; i < STEPS; i++) {
                     const x = (canvas.width / STEPS) * i;
                     ctx.beginPath();
@@ -238,16 +252,18 @@
             }
         }
 
-        // Función estricta de cuantización para percusiones a la grilla métrica
+        // Cuantización geométrica exacta al centro de cada columna de la grilla
         function quantizeXForDrums(x) {
-            if (!showGrid) return x;
             const stepWidth = canvas.width / STEPS;
-            const stepIndex = Math.round(x / stepWidth);
-            return stepIndex * stepWidth;
+            const stepIndex = Math.round((x - (stepWidth / 2)) / stepWidth);
+            const clampedIndex = Math.max(0, Math.min(stepIndex, STEPS - 1));
+            // Retorna exactamente el centro de la celda de la grilla
+            return (clampedIndex * stepWidth) + (stepWidth / 2);
         }
 
-        // Inicialización
-        drawBackgroundAndGrid();
+        // Inicialización general
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
         audioCtx2D.clearRect(0, 0, audioCanvas.width, audioCanvas.height);
         saveState();
 
@@ -256,26 +272,9 @@
             e.target.classList.toggle('active', showGrid);
             e.target.textContent = showGrid ? 'Grilla: ON' : 'Grilla: OFF';
             
-            // Forzamos el redibujado instantáneo superponiendo los trazos guardados sobre el fondo actualizado
-            redrawCanvasFromHistory();
+            // Renderizado instantáneo al tocar el botón
+            renderScene();
         });
-
-        function redrawCanvasFromHistory() {
-            // Dibujamos el fondo blanco y la grilla (ON u OFF según corresponda)
-            drawBackgroundAndGrid();
-
-            if (history.length > 0) {
-                const currentState = history[history.length - 1];
-                const tempCanvas = document.createElement('canvas');
-                tempCanvas.width = canvas.width;
-                tempCanvas.height = canvas.height;
-                const tempCtx = tempCanvas.getContext('2d');
-                tempCtx.putImageData(currentState.main, 0, 0);
-                
-                // Superponemos los trazos del usuario encima de la grilla
-                ctx.drawImage(tempCanvas, 0, 0);
-            }
-        }
 
         document.querySelectorAll('.tool-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
@@ -299,18 +298,21 @@
 
         function startDown(e) {
             e.preventDefault();
-            isDrawing = true;
-            saveState();
             const pos = getPos(e);
             
             const isPercussion = ['kick', 'hihat', 'snare'].includes(currentTool);
-            // Cuantizamos automáticamente la percusión a la línea de la grilla más cercana
+            
+            // Si es percusión, cuantizamos automáticamente la posición X al centro de la grilla
             const targetX = isPercussion ? quantizeXForDrums(pos.x) : pos.x;
 
-            lastX = targetX; lastY = pos.y;
+            saveState();
+            isDrawing = true;
+            lastX = targetX; 
+            lastY = pos.y;
             
             if (isPercussion) {
                 drawShape(targetX, pos.y);
+                renderScene();
             }
         }
 
@@ -332,6 +334,7 @@
                 audioCtx2D.clearRect(pos.x - size*1.5, pos.y - size*1.5, size*3, size*3);
                 ctx.restore(); audioCtx2D.restore();
                 lastX = pos.x; lastY = pos.y;
+                renderScene();
                 return;
             }
 
@@ -372,6 +375,7 @@
             }
 
             lastX = pos.x; lastY = pos.y;
+            renderScene();
         }
 
         function drawShape(x, y) {
@@ -395,10 +399,22 @@
             audioCtx2D.fillRect(x - 1, y - 1, 2, 2);
             
             ctx.restore(); audioCtx2D.restore();
+            
+            // Actualizamos la historia con el nuevo estado pintado
+            if (history.length > 0) {
+                history[history.length - 1].main = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                history[history.length - 1].audio = audioCtx2D.getImageData(0, 0, audioCanvas.width, audioCanvas.height);
+            }
         }
 
         function drawLine(context, x1, y1, x2, y2) {
             context.beginPath(); context.moveTo(x1, y1); context.lineTo(x2, y2); context.stroke();
+            
+            // Actualizamos el último estado del historial del canvas principal con el trazo continuo en curso
+            if (context === ctx && history.length > 0) {
+                history[history.length - 1].main = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                history[history.length - 1].audio = audioCtx2D.getImageData(0, 0, audioCanvas.width, audioCanvas.height);
+            }
         }
 
         function stopDraw() { isDrawing = false; }
@@ -413,7 +429,7 @@
         document.getElementById('undoBtn').addEventListener('click', () => {
             if (history.length > 1) {
                 history.pop();
-                redrawCanvasFromHistory();
+                renderScene();
                 
                 const prevState = history[history.length - 1];
                 audioCtx2D.putImageData(prevState.audio, 0, 0);
@@ -422,8 +438,10 @@
 
         document.getElementById('clearBtn').addEventListener('click', () => {
             saveState();
-            drawBackgroundAndGrid();
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
             audioCtx2D.clearRect(0, 0, audioCanvas.width, audioCanvas.height);
+            renderScene();
         });
 
         function stopAllActiveTones() {
