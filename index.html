@@ -178,13 +178,15 @@
         let isDrawing = false;
         let currentTool = 'lapiz';
         let isPlaying = false;
-        let playheadX = 0;
-        let lastAudioTime = 0;
-        let lastStep = -1;
+        
+        // --- Variables del motor de tiempo reconstruido ---
+        let totalPlayheadX = 0;
+        let lastTime = 0;
+        let lastScheduledAbsoluteStep = -1;
         let lastColIndex = -1;
-        
+        // ---------------------------------------------------
+
         let showGrid = false; 
-        
         let activeSynths = { lapiz: [], crayon: [], fibra: [], pincel: [] };
         
         let audioCtx = null;
@@ -194,6 +196,7 @@
         let drumSequence = Array(STEPS).fill(null).map(() => ([]));
         let history = [];
 
+        // Dibujar Grilla
         gridCtx.strokeStyle = 'rgba(200, 200, 220, 0.7)';
         gridCtx.lineWidth = 1;
         gridCtx.setLineDash([4, 4]);
@@ -309,6 +312,7 @@
                 if (!drumSequence[q.col].some(d => d.row === q.row && d.tool === currentTool)) {
                     drumSequence[q.col].push({ tool: currentTool, row: q.row });
                     drawShape(q.x, q.y, currentTool);
+                    // Suena inmediatamente al hacer clic
                     playPercussion(currentTool, 1.0);
                 }
             } else if (currentTool === 'goma') {
@@ -393,6 +397,13 @@
             ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
             audioCtx2D.clearRect(0, 0, audioCanvas.width, audioCanvas.height);
             drumSequence = Array(STEPS).fill(null).map(() => ([])); 
+            
+            totalPlayheadX = 0;
+            lastScheduledAbsoluteStep = -1;
+            lastColIndex = -1;
+            if (!isPlaying) {
+                scanLine.style.left = '0%';
+            }
         });
 
         const playBtn = document.getElementById('playBtn');
@@ -405,9 +416,9 @@
 
             if (!isPlaying) {
                 stopAllSynths();
-                lastColIndex = -1;
             } else {
-                lastAudioTime = audioCtx.currentTime; 
+                lastTime = audioCtx.currentTime; 
+                lastColIndex = -1; // Forza reevaluar la columna al quitar pausa
             }
         });
 
@@ -423,34 +434,46 @@
             });
         }
 
+        // MOTOR DE TIEMPO CON LOOKAHEAD SCHEDULING
         function animate() {
             requestAnimationFrame(animate);
             if (!isPlaying || !audioCtx) return;
 
             const now = audioCtx.currentTime;
-            let dt = now - lastAudioTime;
-            lastAudioTime = now;
+            let dt = now - lastTime;
+            lastTime = now;
             
+            // Limitar saltos grandes (por ej. si cambiás de pestaña)
             if (dt > 0.1) dt = 0.1; 
 
-            const pixelsPerSecond = parseFloat(document.getElementById('tempoSelect').value);
-            playheadX += dt * pixelsPerSecond;
+            const pps = parseFloat(document.getElementById('tempoSelect').value);
+            totalPlayheadX += dt * pps;
 
-            if (playheadX >= canvas.width) {
-                playheadX = playheadX % canvas.width;
-                lastStep = -1; 
-                lastColIndex = -1;
+            const currentX = totalPlayheadX % canvas.width;
+            scanLine.style.left = (currentX / canvas.width * 100) + '%';
+
+            // 1. Precise Lookahead Drum Scheduling (Separado del visual)
+            const lookaheadTime = 0.1; // Mira 100ms hacia el futuro
+            const lookaheadPixels = lookaheadTime * pps;
+            const targetTotalX = totalPlayheadX + lookaheadPixels;
+            
+            const stepWidth = canvas.width / STEPS;
+            const targetAbsoluteStep = Math.floor(targetTotalX / stepWidth);
+            
+            while (lastScheduledAbsoluteStep < targetAbsoluteStep) {
+                lastScheduledAbsoluteStep++;
+                const stepIndex = lastScheduledAbsoluteStep % STEPS;
+                
+                // Calculamos en qué milisegundo exacto tiene que sonar esto en el reloj de Audio
+                const pixelsInFuture = (lastScheduledAbsoluteStep * stepWidth) - totalPlayheadX;
+                const timeInFuture = pixelsInFuture / pps;
+                const scheduleTime = now + timeInFuture;
+                
+                drumSequence[stepIndex].forEach(drum => playPercussion(drum.tool, 1.0, scheduleTime));
             }
 
-            scanLine.style.left = (playheadX / canvas.width * 100) + '%';
-
-            const currentStep = Math.floor(playheadX / (canvas.width / STEPS));
-            if (currentStep !== lastStep && currentStep >= 0 && currentStep < STEPS) {
-                lastStep = currentStep;
-                drumSequence[currentStep].forEach(drum => playPercussion(drum.tool, 1.0));
-            }
-
-            const colIndex = Math.floor(playheadX);
+            // 2. Continuous Synths (El paint musical)
+            const colIndex = Math.floor(currentX);
             if (colIndex !== lastColIndex && colIndex < audioCanvas.width) {
                 lastColIndex = colIndex;
                 processColumnAudio(colIndex, now);
@@ -534,7 +557,7 @@
                         gain.gain.setValueAtTime(0.0001, now);
                         gain.gain.linearRampToValueAtTime(0.18, now + 0.03);
                         osc.connect(gain); gain.connect(masterGain);
-                        osc.start();
+                        osc.start(now);
                         newSynths.push({ osc, gain, currentFreq: freqs[i] });
                     } else {
                         let synth = synths[i];
@@ -554,48 +577,69 @@
             gain.gain.value = 0.15;
             gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.15);
             osc.connect(gain); gain.connect(masterGain);
-            osc.start(); osc.stop(audioCtx.currentTime + 0.2);
+            osc.start(audioCtx.currentTime); osc.stop(audioCtx.currentTime + 0.2);
         }
 
-        function playPercussion(type, intensity = 1.0) {
+        // El parámetro `time` permite programar los golpes en el futuro
+        function playPercussion(type, intensity = 1.0, time = null) {
             if (!audioCtx) return;
-            const now = audioCtx.currentTime;
+            const now = time !== null ? time : audioCtx.currentTime;
 
             if (type === 'kick') {
                 const osc = audioCtx.createOscillator();
                 const gain = audioCtx.createGain();
-                osc.type = 'sine'; osc.frequency.setValueAtTime(130, now); osc.frequency.exponentialRampToValueAtTime(45, now + 0.06); 
-                gain.gain.setValueAtTime(1.8, now); gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
-                osc.connect(gain); gain.connect(masterGain); osc.start(now); osc.stop(now + 0.3);
+                osc.type = 'sine'; 
+                osc.frequency.setValueAtTime(130, now); 
+                osc.frequency.exponentialRampToValueAtTime(45, now + 0.06); 
+                gain.gain.setValueAtTime(1.8, now); 
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+                osc.connect(gain); gain.connect(masterGain); 
+                osc.start(now); osc.stop(now + 0.3);
             } else if (type === 'hihat') {
                 const bufferSize = audioCtx.sampleRate * 0.04;
                 const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-                const output = buffer.getChannelData(0); for (let i = 0; i < bufferSize; i++) output[i] = Math.random() * 2 - 1;
+                const output = buffer.getChannelData(0); 
+                for (let i = 0; i < bufferSize; i++) output[i] = Math.random() * 2 - 1;
                 const noise = audioCtx.createBufferSource(); noise.buffer = buffer;
                 const filter = audioCtx.createBiquadFilter(); filter.type = 'highpass'; filter.frequency.value = 7000;
-                const gain = audioCtx.createGain(); gain.gain.setValueAtTime(0.7, now); gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
-                noise.connect(filter); filter.connect(gain); gain.connect(masterGain); noise.start(now); noise.stop(now + 0.1);
+                const gain = audioCtx.createGain(); 
+                gain.gain.setValueAtTime(0.7, now); 
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+                noise.connect(filter); filter.connect(gain); gain.connect(masterGain); 
+                noise.start(now); noise.stop(now + 0.1);
             } else if (type === 'snare') {
                 const osc = audioCtx.createOscillator(); const oscGain = audioCtx.createGain();
-                osc.type = 'triangle'; osc.frequency.setValueAtTime(220, now); osc.frequency.exponentialRampToValueAtTime(100, now + 0.05);
-                oscGain.gain.setValueAtTime(0.6, now); oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.08); 
-                osc.connect(oscGain); oscGain.connect(masterGain); osc.start(now); osc.stop(now + 0.1);
+                osc.type = 'triangle'; 
+                osc.frequency.setValueAtTime(220, now); 
+                osc.frequency.exponentialRampToValueAtTime(100, now + 0.05);
+                oscGain.gain.setValueAtTime(0.6, now); 
+                oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.08); 
+                osc.connect(oscGain); oscGain.connect(masterGain); 
+                osc.start(now); osc.stop(now + 0.1);
 
                 const bufferSize = audioCtx.sampleRate * 0.1;
                 const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-                const output = buffer.getChannelData(0); for (let i = 0; i < bufferSize; i++) output[i] = Math.random() * 2 - 1;
+                const output = buffer.getChannelData(0); 
+                for (let i = 0; i < bufferSize; i++) output[i] = Math.random() * 2 - 1;
                 const noise = audioCtx.createBufferSource(); noise.buffer = buffer;
                 const filter = audioCtx.createBiquadFilter(); filter.type = 'bandpass'; filter.frequency.value = 2500;
-                const noiseGain = audioCtx.createGain(); noiseGain.gain.setValueAtTime(0.7, now); noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.1); 
-                noise.connect(filter); filter.connect(noiseGain); noiseGain.connect(masterGain); noise.start(now); noise.stop(now + 0.15);
+                const noiseGain = audioCtx.createGain(); 
+                noiseGain.gain.setValueAtTime(0.7, now); 
+                noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.1); 
+                noise.connect(filter); filter.connect(noiseGain); noiseGain.connect(masterGain); 
+                noise.start(now); noise.stop(now + 0.15);
             } else if (type === 'clap') {
                 const bufferSize = audioCtx.sampleRate * 0.15;
                 const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-                const output = buffer.getChannelData(0); for (let i = 0; i < bufferSize; i++) output[i] = Math.random() * 2 - 1;
+                const output = buffer.getChannelData(0); 
+                for (let i = 0; i < bufferSize; i++) output[i] = Math.random() * 2 - 1;
                 const noise = audioCtx.createBufferSource(); noise.buffer = buffer;
                 const filter = audioCtx.createBiquadFilter(); filter.type = 'bandpass'; filter.frequency.value = 1500;
-                const gain = audioCtx.createGain(); gain.gain.setValueAtTime(0.8, now); gain.gain.exponentialRampToValueAtTime(0.001, now + 0.02);
-                noise.connect(filter); filter.connect(gain); gain.connect(masterGain); noise.start(now); noise.stop(now + 0.25);
+                const gain = audioCtx.createGain(); 
+                gain.gain.setValueAtTime(0.8, now); 
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.02);
+                noise.connect(filter); filter.connect(gain); gain.connect(masterGain); 
+                noise.start(now); noise.stop(now + 0.25);
             }
         }
 
