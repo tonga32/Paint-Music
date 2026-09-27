@@ -86,7 +86,7 @@
 
         #gridCanvas {
             pointer-events: none;
-            display: none;
+            display: none; /* Oculto por defecto */
         }
 
         #scanLine {
@@ -143,7 +143,6 @@
 
         <div class="control-group">
             <label>Tempo:</label>
-            <!-- Los valores ahora representan Píxeles por Segundo exactos -->
             <select id="tempoSelect">
                 <option value="180">Lento</option>
                 <option value="250" selected>Normal</option>
@@ -185,6 +184,9 @@
         let lastAudioTime = 0;
         let lastStep = -1;
         let lastColIndex = -1;
+        
+        // ¡ESTA ERA LA VARIABLE QUE FALTABA!
+        let showGrid = false; 
         
         let activeSynths = { lapiz: [], crayon: [], fibra: [], pincel: [] };
         
@@ -269,6 +271,7 @@
         audioCtx2D.clearRect(0, 0, audioCanvas.width, audioCanvas.height);
         saveState();
 
+        // Lógica del botón de grilla corregida
         document.getElementById('gridBtn').addEventListener('click', (e) => {
             showGrid = !showGrid;
             e.target.classList.toggle('active', showGrid);
@@ -408,7 +411,7 @@
                 stopAllSynths();
                 lastColIndex = -1;
             } else {
-                lastAudioTime = audioCtx.currentTime; // Reiniciamos el reloj Delta al poner play
+                lastAudioTime = audioCtx.currentTime; 
             }
         });
 
@@ -424,7 +427,6 @@
             });
         }
 
-        // NUEVO MOTOR DE TEMPO CLAVADO AL RELOJ DE AUDIO (No depende de los FPS)
         function animate() {
             requestAnimationFrame(animate);
             if (!isPlaying || !audioCtx) return;
@@ -433,7 +435,7 @@
             let dt = now - lastAudioTime;
             lastAudioTime = now;
             
-            if (dt > 0.1) dt = 0.1; // Seguridad por si cambias de pestaña en el navegador
+            if (dt > 0.1) dt = 0.1; 
 
             const pixelsPerSecond = parseFloat(document.getElementById('tempoSelect').value);
             playheadX += dt * pixelsPerSecond;
@@ -459,7 +461,6 @@
             }
         }
 
-        // NUEVA LÓGICA DE BLOB-TRACKING PARA POLIFONÍA DE MISMAS HERRAMIENTAS
         function processColumnAudio(colIndex, now) {
             const imgData = audioCtx2D.getImageData(colIndex, 0, 1, audioCanvas.height);
             const data = imgData.data;
@@ -470,7 +471,6 @@
             let currentBlob = null;
             let aerosolTriggered = false;
 
-            // Escaneamos píxeles buscando líneas contínuas (blobs) de colores
             for (let y = 0; y < audioCanvas.height; y += 2) {
                 const alpha = data[(y * 4) + 3];
                 let toolFound = null;
@@ -507,10 +507,8 @@
             }
             if (currentBlob) toolBlobs[currentBlob.tool].push(currentBlob);
 
-            // Asignar frecuencias y osciladores (Polifonía + Glissando real)
             Object.keys(toolBlobs).forEach(tool => {
                 let blobs = toolBlobs[tool];
-                // Convertir cada mancha a su frecuencia correspondiente
                 let freqs = blobs.map(b => {
                     let centerY = (b.startY + b.endY) / 2;
                     let noteIndex = Math.floor(((audioCanvas.height - centerY) / audioCanvas.height) * currentScale.length);
@@ -519,7 +517,6 @@
 
                 let synths = activeSynths[tool];
                 
-                // Ordenar para emparejar la línea más grave con el oscilador más grave, etc (Evita cruces)
                 freqs.sort((a, b) => a - b);
                 synths.sort((a, b) => a.currentFreq - b.currentFreq);
 
@@ -528,14 +525,12 @@
 
                 for (let i = 0; i < maxCount; i++) {
                     if (i < freqs.length && i < synths.length) {
-                        // Deslizar oscilador existente a la nueva nota
                         let synth = synths[i];
                         synth.osc.frequency.setTargetAtTime(freqs[i], now, 0.02);
                         synth.currentFreq = freqs[i];
                         synth.gain.gain.setTargetAtTime(0.18, now, 0.02);
                         newSynths.push(synth);
                     } else if (i < freqs.length) {
-                        // Crear nuevo oscilador para la nueva línea
                         const osc = audioCtx.createOscillator();
                         const gain = audioCtx.createGain();
                         osc.type = toolAudioMap[tool].type;
@@ -546,7 +541,6 @@
                         osc.start();
                         newSynths.push({ osc, gain, currentFreq: freqs[i] });
                     } else {
-                        // Apagar osciladores sobrantes si una línea terminó
                         let synth = synths[i];
                         synth.gain.gain.setTargetAtTime(0.0001, now, 0.03);
                         synth.osc.stop(now + 0.1);
