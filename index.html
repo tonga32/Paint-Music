@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Paint Musical - TR-909 PRO Fluidsync</title>
+    <title>Paint Musical - TR-909 PRO Polyphonic</title>
     <style>
         body {
             margin: 0;
@@ -105,7 +105,7 @@
 <body>
 
     <h1>Paint Musical & TR-909 PRO</h1>
-    <p>¡Líneas continuas con glissandos fluidos en pentatónicas!</p>
+    <p>¡Tempo perfecto, polifonía por herramienta y glissandos!</p>
 
     <div id="controls">
         <div class="control-group">
@@ -143,10 +143,11 @@
 
         <div class="control-group">
             <label>Tempo:</label>
+            <!-- Los valores ahora representan Píxeles por Segundo exactos -->
             <select id="tempoSelect">
-                <option value="1.5">Lento</option>
-                <option value="3" selected>Normal</option>
-                <option value="5">Rápido</option>
+                <option value="180">Lento</option>
+                <option value="250" selected>Normal</option>
+                <option value="340">Rápido</option>
             </select>
         </div>
 
@@ -180,11 +181,12 @@
         let isDrawing = false;
         let currentTool = 'lapiz';
         let isPlaying = false;
-        let showGrid = false;
-        let scanX = 0;
+        let playheadX = 0;
+        let lastAudioTime = 0;
         let lastStep = -1;
         let lastColIndex = -1;
-        let activeSynths = {}; // Control de notas continuas por herramienta/ID
+        
+        let activeSynths = { lapiz: [], crayon: [], fibra: [], pincel: [] };
         
         let audioCtx = null;
         let masterGain = null;
@@ -193,7 +195,6 @@
         let drumSequence = Array(STEPS).fill(null).map(() => ([]));
         let history = [];
 
-        // Grilla visual
         gridCtx.strokeStyle = 'rgba(200, 200, 220, 0.7)';
         gridCtx.lineWidth = 1;
         gridCtx.setLineDash([4, 4]);
@@ -298,14 +299,11 @@
         function startDown(e) {
             e.preventDefault();
             initAudio(); 
-
             const pos = getPos(e);
             const isPercussion = ['kick', 'hihat', 'snare', 'clap'].includes(currentTool);
-            
             saveState();
             isDrawing = true;
-            lastX = pos.x; 
-            lastY = pos.y;
+            lastX = pos.x; lastY = pos.y;
             
             if (isPercussion) {
                 const q = quantizePos(pos.x, pos.y);
@@ -329,27 +327,17 @@
             const size = parseInt(document.getElementById('sizeRange').value);
 
             if (currentTool === 'goma') {
-                ctx.save();
-                ctx.beginPath();
-                ctx.arc(pos.x, pos.y, size * 1.5, 0, Math.PI * 2);
-                ctx.fillStyle = '#ffffff'; 
-                ctx.fill(); 
-                ctx.restore();
+                ctx.save(); ctx.beginPath(); ctx.arc(pos.x, pos.y, size * 1.5, 0, Math.PI * 2);
+                ctx.fillStyle = '#ffffff'; ctx.fill(); ctx.restore();
 
-                audioCtx2D.save();
-                audioCtx2D.beginPath();
-                audioCtx2D.arc(pos.x, pos.y, size * 1.5, 0, Math.PI * 2);
+                audioCtx2D.save(); audioCtx2D.beginPath(); audioCtx2D.arc(pos.x, pos.y, size * 1.5, 0, Math.PI * 2);
                 audioCtx2D.globalCompositeOperation = 'destination-out';
-                audioCtx2D.fillStyle = 'rgba(0,0,0,1)';
-                audioCtx2D.fill();
-                audioCtx2D.globalCompositeOperation = 'source-over';
-                audioCtx2D.restore();
+                audioCtx2D.fillStyle = 'rgba(0,0,0,1)'; audioCtx2D.fill();
+                audioCtx2D.globalCompositeOperation = 'source-over'; audioCtx2D.restore();
                 
                 const q = quantizePos(pos.x, pos.y);
                 drumSequence[q.col] = drumSequence[q.col].filter(d => d.row !== q.row);
-
-                lastX = pos.x; lastY = pos.y;
-                return;
+                lastX = pos.x; lastY = pos.y; return;
             }
 
             const toolInfo = toolAudioMap[currentTool];
@@ -358,15 +346,13 @@
             ctx.lineWidth = size; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
             ctx.strokeStyle = color; ctx.fillStyle = color;
             
-            audioCtx2D.globalCompositeOperation = 'source-over';
-            audioCtx2D.globalAlpha = 1.0;
+            audioCtx2D.globalCompositeOperation = 'source-over'; audioCtx2D.globalAlpha = 1.0;
             audioCtx2D.lineWidth = size; audioCtx2D.lineCap = 'round'; audioCtx2D.lineJoin = 'round';
             audioCtx2D.strokeStyle = audioColorStr; audioCtx2D.fillStyle = audioColorStr;
 
             if (currentTool === 'aerosol') {
                 for (let i = 0; i < 10; i++) {
-                    const offsetX = (Math.random() - 0.5) * size * 2.5;
-                    const offsetY = (Math.random() - 0.5) * size * 2.5;
+                    const offsetX = (Math.random() - 0.5) * size * 2.5; const offsetY = (Math.random() - 0.5) * size * 2.5;
                     ctx.globalAlpha = 0.3; ctx.fillRect(pos.x + offsetX, pos.y + offsetY, 2, 2);
                     audioCtx2D.globalAlpha = 0.6; audioCtx2D.fillRect(pos.x + offsetX, pos.y + offsetY, 2, 2);
                 }
@@ -375,55 +361,37 @@
                 drawLine(ctx, lastX, lastY, pos.x, pos.y); 
                 drawLine(audioCtx2D, lastX, lastY, pos.x, pos.y);
             }
-
             lastX = pos.x; lastY = pos.y;
         }
 
         function drawShape(x, y, tool) {
             const rawSize = parseInt(document.getElementById('sizeRange').value);
             const size = Math.max(rawSize * 1.5, 14); 
-            
             ctx.save();
-            if (tool === 'kick') {
-                ctx.fillStyle = '#ff4757'; ctx.beginPath(); ctx.arc(x, y, size, 0, Math.PI * 2); ctx.fill();
-            } else if (tool === 'hihat') {
-                ctx.fillStyle = '#2ed573'; ctx.beginPath();
-                ctx.moveTo(x, y - size); ctx.lineTo(x - size, y + size); ctx.lineTo(x + size, y + size); ctx.closePath(); ctx.fill();
-            } else if (tool === 'snare') {
-                ctx.fillStyle = '#1e90ff'; ctx.fillRect(x - size, y - size, size * 2, size * 2);
-            } else if (tool === 'clap') {
-                ctx.fillStyle = '#ffa502'; ctx.beginPath();
-                ctx.moveTo(x, y - size); ctx.lineTo(x + size, y); ctx.lineTo(x, y + size); ctx.lineTo(x - size, y); ctx.closePath(); ctx.fill();
-            }
+            if (tool === 'kick') { ctx.fillStyle = '#ff4757'; ctx.beginPath(); ctx.arc(x, y, size, 0, Math.PI * 2); ctx.fill(); }
+            else if (tool === 'hihat') { ctx.fillStyle = '#2ed573'; ctx.beginPath(); ctx.moveTo(x, y - size); ctx.lineTo(x - size, y + size); ctx.lineTo(x + size, y + size); ctx.closePath(); ctx.fill(); }
+            else if (tool === 'snare') { ctx.fillStyle = '#1e90ff'; ctx.fillRect(x - size, y - size, size * 2, size * 2); }
+            else if (tool === 'clap') { ctx.fillStyle = '#ffa502'; ctx.beginPath(); ctx.moveTo(x, y - size); ctx.lineTo(x + size, y); ctx.lineTo(x, y + size); ctx.lineTo(x - size, y); ctx.closePath(); ctx.fill(); }
             ctx.restore();
         }
 
-        function drawLine(context, x1, y1, x2, y2) {
-            context.beginPath(); context.moveTo(x1, y1); context.lineTo(x2, y2); context.stroke();
-        }
-
+        function drawLine(context, x1, y1, x2, y2) { context.beginPath(); context.moveTo(x1, y1); context.lineTo(x2, y2); context.stroke(); }
         function stopDraw() { isDrawing = false; }
 
-        canvas.addEventListener('mousedown', startDown);
-        canvas.addEventListener('mousemove', draw);
-        window.addEventListener('mouseup', stopDraw);
-        canvas.addEventListener('touchstart', startDown, { passive: false });
-        canvas.addEventListener('touchmove', draw, { passive: false });
-        canvas.addEventListener('touchend', stopDraw);
+        canvas.addEventListener('mousedown', startDown); canvas.addEventListener('mousemove', draw); window.addEventListener('mouseup', stopDraw);
+        canvas.addEventListener('touchstart', startDown, { passive: false }); canvas.addEventListener('touchmove', draw, { passive: false }); canvas.addEventListener('touchend', stopDraw);
 
         document.getElementById('undoBtn').addEventListener('click', () => {
             if (history.length > 0) {
                 const prevState = history.pop();
-                ctx.putImageData(prevState.main, 0, 0);
-                audioCtx2D.putImageData(prevState.audio, 0, 0);
+                ctx.putImageData(prevState.main, 0, 0); audioCtx2D.putImageData(prevState.audio, 0, 0);
                 drumSequence = JSON.parse(JSON.stringify(prevState.drums));
             }
         });
 
         document.getElementById('clearBtn').addEventListener('click', () => {
             saveState(); 
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
             audioCtx2D.clearRect(0, 0, audioCanvas.width, audioCanvas.height);
             drumSequence = Array(STEPS).fill(null).map(() => ([])); 
         });
@@ -439,118 +407,152 @@
             if (!isPlaying) {
                 stopAllSynths();
                 lastColIndex = -1;
+            } else {
+                lastAudioTime = audioCtx.currentTime; // Reiniciamos el reloj Delta al poner play
             }
         });
 
         function stopAllSynths() {
-            for (let tool in activeSynths) {
-                if (activeSynths[tool]) {
+            Object.keys(activeSynths).forEach(tool => {
+                activeSynths[tool].forEach(synth => {
                     try {
-                        activeSynths[tool].gain.gain.setTargetAtTime(0.0001, audioCtx.currentTime, 0.05);
-                        activeSynths[tool].osc.stop(audioCtx.currentTime + 0.1);
+                        synth.gain.gain.setTargetAtTime(0.0001, audioCtx.currentTime, 0.03);
+                        synth.osc.stop(audioCtx.currentTime + 0.1);
                     } catch(e) {}
-                    activeSynths[tool] = null;
-                }
-            }
+                });
+                activeSynths[tool] = [];
+            });
         }
 
+        // NUEVO MOTOR DE TEMPO CLAVADO AL RELOJ DE AUDIO (No depende de los FPS)
         function animate() {
             requestAnimationFrame(animate);
-            if (!isPlaying) return;
+            if (!isPlaying || !audioCtx) return;
 
-            const speed = parseFloat(document.getElementById('tempoSelect').value);
-            scanX += speed;
-            if (scanX > canvas.width) {
-                scanX = 0;
+            const now = audioCtx.currentTime;
+            let dt = now - lastAudioTime;
+            lastAudioTime = now;
+            
+            if (dt > 0.1) dt = 0.1; // Seguridad por si cambias de pestaña en el navegador
+
+            const pixelsPerSecond = parseFloat(document.getElementById('tempoSelect').value);
+            playheadX += dt * pixelsPerSecond;
+
+            if (playheadX >= canvas.width) {
+                playheadX = playheadX % canvas.width;
                 lastStep = -1; 
                 lastColIndex = -1;
             }
 
-            const percent = (scanX / canvas.width) * 100;
-            scanLine.style.left = percent + '%';
+            scanLine.style.left = (playheadX / canvas.width * 100) + '%';
 
-            const colIndex = Math.floor(scanX);
-            if (colIndex !== lastColIndex && colIndex < audioCanvas.width) {
-                lastColIndex = colIndex;
-                processColumnAudio(colIndex);
-            }
-
-            const currentStep = Math.floor(scanX / (canvas.width / STEPS));
+            const currentStep = Math.floor(playheadX / (canvas.width / STEPS));
             if (currentStep !== lastStep && currentStep >= 0 && currentStep < STEPS) {
                 lastStep = currentStep;
-                drumSequence[currentStep].forEach(drum => {
-                    playPercussion(drum.tool, 1.0);
-                });
+                drumSequence[currentStep].forEach(drum => playPercussion(drum.tool, 1.0));
+            }
+
+            const colIndex = Math.floor(playheadX);
+            if (colIndex !== lastColIndex && colIndex < audioCanvas.width) {
+                lastColIndex = colIndex;
+                processColumnAudio(colIndex, now);
             }
         }
 
-        // Lógica corregida para lectura fluida y glissandos sin cortes
-        function processColumnAudio(colIndex) {
+        // NUEVA LÓGICA DE BLOB-TRACKING PARA POLIFONÍA DE MISMAS HERRAMIENTAS
+        function processColumnAudio(colIndex, now) {
             const imgData = audioCtx2D.getImageData(colIndex, 0, 1, audioCanvas.height);
             const data = imgData.data;
             const scaleType = document.getElementById('scaleSelect').value || 'pentatonic_menor';
             const currentScale = scales[scaleType];
 
-            let foundTools = {};
+            let toolBlobs = { lapiz: [], crayon: [], fibra: [], pincel: [] };
+            let currentBlob = null;
+            let aerosolTriggered = false;
 
-            for (let y = 0; y < audioCanvas.height; y += 4) {
+            // Escaneamos píxeles buscando líneas contínuas (blobs) de colores
+            for (let y = 0; y < audioCanvas.height; y += 2) {
                 const alpha = data[(y * 4) + 3];
+                let toolFound = null;
+
                 if (alpha > 20) {
                     const r = data[(y * 4)];
                     const rSnap = Math.round(r / 10) * 10;
-                    if (rSnap >= 10 && rSnap <= 40) {
-                        let tool = 'lapiz';
-                        if (rSnap === 20) tool = 'crayon';
-                        else if (rSnap === 30) tool = 'fibra';
-                        else if (rSnap === 40) tool = 'pincel';
-
-                        const noteIndex = Math.floor(((audioCanvas.height - y) / audioCanvas.height) * currentScale.length);
-                        const safeIndex = Math.min(noteIndex, currentScale.length - 1);
-                        
-                        // Guardamos la nota más alta detectada por herramienta en esta columna
-                        if (!foundTools[tool] || y < foundTools[tool].y) {
-                            foundTools[tool] = { freq: currentScale[safeIndex], y };
+                    if (rSnap === 10) toolFound = 'lapiz';
+                    else if (rSnap === 20) toolFound = 'crayon';
+                    else if (rSnap === 30) toolFound = 'fibra';
+                    else if (rSnap === 40) toolFound = 'pincel';
+                    else if (rSnap === 50) {
+                        if (!aerosolTriggered) {
+                            const noteIndex = Math.floor(((audioCanvas.height - y) / audioCanvas.height) * currentScale.length);
+                            playShortTone(currentScale[Math.min(noteIndex, currentScale.length - 1)], 'square');
+                            aerosolTriggered = true;
                         }
-                    } else if (rSnap === 50) {
-                        // Aerosol (disparo corto)
-                        const noteIndex = Math.floor(((audioCanvas.height - y) / audioCanvas.height) * currentScale.length);
-                        playShortTone(currentScale[Math.min(noteIndex, currentScale.length - 1)], 'square');
+                    }
+                }
+
+                if (toolFound) {
+                    if (!currentBlob || currentBlob.tool !== toolFound) {
+                        if (currentBlob) toolBlobs[currentBlob.tool].push(currentBlob);
+                        currentBlob = { tool: toolFound, startY: y, endY: y };
+                    } else {
+                        currentBlob.endY = y;
+                    }
+                } else {
+                    if (currentBlob) {
+                        toolBlobs[currentBlob.tool].push(currentBlob);
+                        currentBlob = null;
                     }
                 }
             }
+            if (currentBlob) toolBlobs[currentBlob.tool].push(currentBlob);
 
-            const now = audioCtx.currentTime;
+            // Asignar frecuencias y osciladores (Polifonía + Glissando real)
+            Object.keys(toolBlobs).forEach(tool => {
+                let blobs = toolBlobs[tool];
+                // Convertir cada mancha a su frecuencia correspondiente
+                let freqs = blobs.map(b => {
+                    let centerY = (b.startY + b.endY) / 2;
+                    let noteIndex = Math.floor(((audioCanvas.height - centerY) / audioCanvas.height) * currentScale.length);
+                    return currentScale[Math.min(noteIndex, currentScale.length - 1)];
+                });
 
-            // Gestionar instrumentos continuos (glissandos)
-            ['lapiz', 'crayon', 'fibra', 'pincel'].forEach(tool => {
-                if (foundTools[tool]) {
-                    const targetFreq = foundTools[tool].freq;
-                    if (!activeSynths[tool]) {
-                        // Iniciar oscilador continuo si no existe
+                let synths = activeSynths[tool];
+                
+                // Ordenar para emparejar la línea más grave con el oscilador más grave, etc (Evita cruces)
+                freqs.sort((a, b) => a - b);
+                synths.sort((a, b) => a.currentFreq - b.currentFreq);
+
+                let newSynths = [];
+                let maxCount = Math.max(freqs.length, synths.length);
+
+                for (let i = 0; i < maxCount; i++) {
+                    if (i < freqs.length && i < synths.length) {
+                        // Deslizar oscilador existente a la nueva nota
+                        let synth = synths[i];
+                        synth.osc.frequency.setTargetAtTime(freqs[i], now, 0.02);
+                        synth.currentFreq = freqs[i];
+                        synth.gain.gain.setTargetAtTime(0.18, now, 0.02);
+                        newSynths.push(synth);
+                    } else if (i < freqs.length) {
+                        // Crear nuevo oscilador para la nueva línea
                         const osc = audioCtx.createOscillator();
                         const gain = audioCtx.createGain();
                         osc.type = toolAudioMap[tool].type;
-                        osc.frequency.setValueAtTime(targetFreq, now);
+                        osc.frequency.setValueAtTime(freqs[i], now);
                         gain.gain.setValueAtTime(0.0001, now);
-                        gain.gain.linearRampToValueAtTime(0.18, now + 0.05);
-                        osc.connect(gain);
-                        gain.connect(masterGain);
+                        gain.gain.linearRampToValueAtTime(0.18, now + 0.03);
+                        osc.connect(gain); gain.connect(masterGain);
                         osc.start();
-                        activeSynths[tool] = { osc, gain };
+                        newSynths.push({ osc, gain, currentFreq: freqs[i] });
                     } else {
-                        // Deslizar frecuencia suavemente (Glissando real)
-                        activeSynths[tool].osc.frequency.setTargetAtTime(targetFreq, now, 0.04);
-                    }
-                } else {
-                    // Si el trazo se corta en esta columna, apagar suavemente el oscilador
-                    if (activeSynths[tool]) {
-                        try {
-                            activeSynths[tool].gain.gain.setTargetAtTime(0.0001, now, 0.04);
-                            activeSynths[tool].osc.stop(now + 0.08);
-                        } catch(e) {}
-                        activeSynths[tool] = null;
+                        // Apagar osciladores sobrantes si una línea terminó
+                        let synth = synths[i];
+                        synth.gain.gain.setTargetAtTime(0.0001, now, 0.03);
+                        synth.osc.stop(now + 0.1);
                     }
                 }
+                activeSynths[tool] = newSynths;
             });
         }
 
@@ -572,65 +574,38 @@
             if (type === 'kick') {
                 const osc = audioCtx.createOscillator();
                 const gain = audioCtx.createGain();
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(130, now);
-                osc.frequency.exponentialRampToValueAtTime(45, now + 0.06); 
-                gain.gain.setValueAtTime(1.8, now); 
-                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
-                osc.connect(gain); gain.connect(masterGain);
-                osc.start(now); osc.stop(now + 0.3);
+                osc.type = 'sine'; osc.frequency.setValueAtTime(130, now); osc.frequency.exponentialRampToValueAtTime(45, now + 0.06); 
+                gain.gain.setValueAtTime(1.8, now); gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+                osc.connect(gain); gain.connect(masterGain); osc.start(now); osc.stop(now + 0.3);
             } else if (type === 'hihat') {
                 const bufferSize = audioCtx.sampleRate * 0.04;
                 const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-                const output = buffer.getChannelData(0);
-                for (let i = 0; i < bufferSize; i++) output[i] = Math.random() * 2 - 1;
-                const noise = audioCtx.createBufferSource();
-                noise.buffer = buffer;
-                const filter = audioCtx.createBiquadFilter();
-                filter.type = 'highpass'; filter.frequency.value = 7000;
-                const gain = audioCtx.createGain();
-                gain.gain.setValueAtTime(0.7, now);
-                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
-                noise.connect(filter); filter.connect(gain); gain.connect(masterGain);
-                noise.start(now); noise.stop(now + 0.1);
+                const output = buffer.getChannelData(0); for (let i = 0; i < bufferSize; i++) output[i] = Math.random() * 2 - 1;
+                const noise = audioCtx.createBufferSource(); noise.buffer = buffer;
+                const filter = audioCtx.createBiquadFilter(); filter.type = 'highpass'; filter.frequency.value = 7000;
+                const gain = audioCtx.createGain(); gain.gain.setValueAtTime(0.7, now); gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+                noise.connect(filter); filter.connect(gain); gain.connect(masterGain); noise.start(now); noise.stop(now + 0.1);
             } else if (type === 'snare') {
-                const osc = audioCtx.createOscillator();
-                const oscGain = audioCtx.createGain();
-                osc.type = 'triangle';
-                osc.frequency.setValueAtTime(220, now);
-                osc.frequency.exponentialRampToValueAtTime(100, now + 0.05);
-                oscGain.gain.setValueAtTime(0.6, now);
-                oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.08); 
-                osc.connect(oscGain); oscGain.connect(masterGain);
-                osc.start(now); osc.stop(now + 0.1);
+                const osc = audioCtx.createOscillator(); const oscGain = audioCtx.createGain();
+                osc.type = 'triangle'; osc.frequency.setValueAtTime(220, now); osc.frequency.exponentialRampToValueAtTime(100, now + 0.05);
+                oscGain.gain.setValueAtTime(0.6, now); oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.08); 
+                osc.connect(oscGain); oscGain.connect(masterGain); osc.start(now); osc.stop(now + 0.1);
 
                 const bufferSize = audioCtx.sampleRate * 0.1;
                 const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-                const output = buffer.getChannelData(0);
-                for (let i = 0; i < bufferSize; i++) output[i] = Math.random() * 2 - 1;
-                const noise = audioCtx.createBufferSource();
-                noise.buffer = buffer;
-                const filter = audioCtx.createBiquadFilter();
-                filter.type = 'bandpass'; filter.frequency.value = 2500;
-                const noiseGain = audioCtx.createGain();
-                noiseGain.gain.setValueAtTime(0.7, now);
-                noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.1); 
-                noise.connect(filter); filter.connect(noiseGain); noiseGain.connect(masterGain);
-                noise.start(now); noise.stop(now + 0.15);
+                const output = buffer.getChannelData(0); for (let i = 0; i < bufferSize; i++) output[i] = Math.random() * 2 - 1;
+                const noise = audioCtx.createBufferSource(); noise.buffer = buffer;
+                const filter = audioCtx.createBiquadFilter(); filter.type = 'bandpass'; filter.frequency.value = 2500;
+                const noiseGain = audioCtx.createGain(); noiseGain.gain.setValueAtTime(0.7, now); noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.1); 
+                noise.connect(filter); filter.connect(noiseGain); noiseGain.connect(masterGain); noise.start(now); noise.stop(now + 0.15);
             } else if (type === 'clap') {
                 const bufferSize = audioCtx.sampleRate * 0.15;
                 const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-                const output = buffer.getChannelData(0);
-                for (let i = 0; i < bufferSize; i++) output[i] = Math.random() * 2 - 1;
-                const noise = audioCtx.createBufferSource();
-                noise.buffer = buffer;
-                const filter = audioCtx.createBiquadFilter();
-                filter.type = 'bandpass'; filter.frequency.value = 1500;
-                const gain = audioCtx.createGain();
-                gain.gain.setValueAtTime(0.8, now);
-                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.02);
-                noise.connect(filter); filter.connect(gain); gain.connect(masterGain);
-                noise.start(now); noise.stop(now + 0.25);
+                const output = buffer.getChannelData(0); for (let i = 0; i < bufferSize; i++) output[i] = Math.random() * 2 - 1;
+                const noise = audioCtx.createBufferSource(); noise.buffer = buffer;
+                const filter = audioCtx.createBiquadFilter(); filter.type = 'bandpass'; filter.frequency.value = 1500;
+                const gain = audioCtx.createGain(); gain.gain.setValueAtTime(0.8, now); gain.gain.exponentialRampToValueAtTime(0.001, now + 0.02);
+                noise.connect(filter); filter.connect(gain); gain.connect(masterGain); noise.start(now); noise.stop(now + 0.25);
             }
         }
 
