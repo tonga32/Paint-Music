@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Paint Musical - TR-909 PRO Polyphonic</title>
+    <title>Paint Musical</title>
     <style>
         body {
             margin: 0;
@@ -17,7 +17,6 @@
             touch-action: none;
         }
         h1 { margin: 5px 0; font-size: 1.3rem; text-align: center; }
-        p { margin: 0 0 8px 0; color: #a0a0c0; font-size: 0.8rem; text-align: center; }
         
         #controls {
             display: flex;
@@ -86,7 +85,7 @@
 
         #gridCanvas {
             pointer-events: none;
-            display: none; /* Oculto por defecto */
+            display: none;
         }
 
         #scanLine {
@@ -104,8 +103,7 @@
 </head>
 <body>
 
-    <h1>Paint Musical & TR-909 PRO</h1>
-    <p>¡Tempo perfecto, polifonía por herramienta y glissandos!</p>
+    <h1>Paint Musical</h1>
 
     <div id="controls">
         <div class="control-group">
@@ -185,7 +183,6 @@
         let lastStep = -1;
         let lastColIndex = -1;
         
-        // ¡ESTA ERA LA VARIABLE QUE FALTABA!
         let showGrid = false; 
         
         let activeSynths = { lapiz: [], crayon: [], fibra: [], pincel: [] };
@@ -271,7 +268,6 @@
         audioCtx2D.clearRect(0, 0, audioCanvas.width, audioCanvas.height);
         saveState();
 
-        // Lógica del botón de grilla corregida
         document.getElementById('gridBtn').addEventListener('click', (e) => {
             showGrid = !showGrid;
             e.target.classList.toggle('active', showGrid);
