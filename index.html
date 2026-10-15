@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Paint Musical - TR-909 PRO Final</title>
+    <title>Paint Musical - TR-909 PRO Perfect Grid</title>
     <style>
         body {
             margin: 0;
@@ -106,7 +106,7 @@
 <body>
 
     <h1>Paint Musical & TR-909 PRO</h1>
-    <p>Timbres equilibrados, borrado de percusiones y tempos lentos precisos.</p>
+    <p>Cuantización métrica exacta y borrado general funcional.</p>
 
     <div id="controls">
         <!-- Timbres melódicos -->
@@ -173,7 +173,7 @@
         let isDrawing = false;
         let currentColor = '#ff4757';
         let currentTimbre = 'sine';
-        let activeTool = null; // null = Lápiz continuo
+        let activeTool = null; 
         let isPlaying = false;
         let showGrid = false;
         let scanX = 0;
@@ -200,9 +200,9 @@
         const colorAudioMap = {
             '#ff4757': { type: 'sine',     audioRed: 10, volume: 0.20 },
             '#2ed573': { type: 'triangle', audioRed: 20, volume: 0.22 },
-            '#1e90ff': { type: 'sawtooth', audioRed: 30, volume: 0.08 }, // Volumen reducido por ser brillante
-            '#ffa502': { type: 'square',   audioRed: 40, volume: 0.07 }, // Volumen reducido por ser chiptune
-            '#9b59b6': { type: 'sine',     audioRed: 50, volume: 0.15 }  // Sub-bass equilibrado
+            '#1e90ff': { type: 'sawtooth', audioRed: 30, volume: 0.08 },
+            '#ffa502': { type: 'square',   audioRed: 40, volume: 0.07 },
+            '#9b59b6': { type: 'sine',     audioRed: 50, volume: 0.15 }
         };
 
         const scales = {
@@ -250,10 +250,12 @@
             }
         }
 
+        // Cuantización métrica exacta basada en las dimensiones reales del canvas interno (500x500)
         function quantizeXForDrums(x) {
             const stepWidth = canvas.width / STEPS;
-            const stepIndex = Math.round((x - (stepWidth / 2)) / stepWidth);
+            const stepIndex = Math.floor(x / stepWidth);
             const clampedIndex = Math.max(0, Math.min(stepIndex, STEPS - 1));
+            // Retorna exactamente el centro de la celda de la grilla
             return (clampedIndex * stepWidth) + (stepWidth / 2);
         }
 
@@ -293,6 +295,7 @@
             const rect = canvas.getBoundingClientRect();
             const clientX = e.touches ? e.touches[0].clientX : e.clientX;
             const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            // Mapeo proporcional exacto a los 500x500 del canvas interno
             const scaleX = canvas.width / rect.width;
             const scaleY = canvas.height / rect.height;
             return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
@@ -366,29 +369,25 @@
             updateHistoryState();
         }
 
-        // Si ya hay una percusión en esa celda exacta, la borra; sino, la coloca.
         function toggleOrDrawPercussion(x, y) {
             let audioRedVal = 60;
             if (activeTool === 'hihat') audioRedVal = 70;
             if (activeTool === 'snare') audioRedVal = 80;
 
-            // Verificamos si ya existe un punto de audio en esa posición exacta
             const existingData = audioCtx2D.getImageData(Math.floor(x), Math.floor(y), 1, 1).data;
             const existingAlpha = existingData[3];
             const existingRed = existingData[0];
 
             if (existingAlpha > 15 && Math.round(existingRed / 10) * 10 === audioRedVal) {
-                // Borrar la percusión existente (limpiar audio y limpiar visual en un radio de 20px)
-                audioCtx2D.clearRect(x - 10, y - 10, 20, 20);
+                audioCtx2D.clearRect(x - 15, y - 15, 30, 30);
                 
                 ctx.save();
                 ctx.beginPath();
-                ctx.arc(x, y, 20, 0, Math.PI * 2);
+                ctx.arc(x, y, 22, 0, Math.PI * 2);
                 ctx.fillStyle = '#ffffff';
                 ctx.fill();
                 ctx.restore();
             } else {
-                // Dibujar nueva percusión
                 const rawSize = parseInt(document.getElementById('sizeRange').value);
                 const size = Math.max(rawSize * 1.5, 12);
                 const audioColorStr = `rgb(${audioRedVal}, ${rawSize}, 0)`;
@@ -445,12 +444,14 @@
             }
         });
 
-        // Botón limpiar todo corregido: borra tanto el canvas visual como el de audio por completo
+        // Botón limpiar todo completamente corregido: borra historial, lienzos y actualiza
         document.getElementById('clearBtn').addEventListener('click', () => {
             saveState();
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             audioCtx2D.clearRect(0, 0, audioCanvas.width, audioCanvas.height);
+            history = []; // Vaciamos historial para asegurar borrado total limpio
+            saveState();
             renderScene();
         });
 
@@ -621,7 +622,7 @@
                 if (drumsInColumn[drum] > 0) {
                     if (drumCooldown[drum] === 0) {
                         playPercussion(drum, drumsInColumn[drum]);
-                        drumCooldown[drum] = 35; // Cooldown seguro para evitar solapamientos a tiempo
+                        drumCooldown[drum] = 35; 
                     }
                 }
             }
