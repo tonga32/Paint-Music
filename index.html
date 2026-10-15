@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Paint Musical - TR-909 PRO Color Timbres</title>
+    <title>Paint Musical - TR-909 PRO Final</title>
     <style>
         body {
             margin: 0;
@@ -29,7 +29,7 @@
             align-items: center;
             flex-wrap: wrap;
             justify-content: center;
-            max-width: 560px;
+            max-width: 580px;
         }
         .control-group {
             display: flex;
@@ -51,7 +51,6 @@
         button:hover, select:hover { background: #3b3bfc; }
         button.active { background: #ff7675; }
         
-        /* Botones de colores para los timbres */
         .color-btn {
             width: 26px;
             height: 26px;
@@ -107,10 +106,10 @@
 <body>
 
     <h1>Paint Musical & TR-909 PRO</h1>
-    <p>Dibujo lineal por colores (timbres) + Percusiones cuantizadas.</p>
+    <p>Timbres equilibrados, borrado de percusiones y tempos lentos precisos.</p>
 
     <div id="controls">
-        <!-- Selector de Timbres mediante Colores -->
+        <!-- Timbres melódicos -->
         <div class="control-group" title="Timbres de Melodía">
             <button class="color-btn active" data-color="#ff4757" data-timbre="sine" style="background: #ff4757;" title="Rojo: Senoidal"></button>
             <button class="color-btn" data-color="#2ed573" data-timbre="triangle" style="background: #2ed573;" title="Verde: Triangular"></button>
@@ -119,12 +118,12 @@
             <button class="color-btn" data-color="#9b59b6" data-timbre="subsine" style="background: #9b59b6;" title="Violeta: Sub-bass"></button>
         </div>
 
-        <!-- Herramientas de Percusión y Borrador -->
+        <!-- Percusiones y Borrador -->
         <div class="control-group">
             <button class="tool-btn" data-tool="kick" title="Kick 909">⭕ Kick</button>
             <button class="tool-btn" data-tool="hihat" title="Hi-Hat 909">🔺 Hat</button>
             <button class="tool-btn" data-tool="snare" title="Snare 909">⬜ Snare</button>
-            <button class="tool-btn" data-tool="goma" title="Borrar">🧹</button>
+            <button class="tool-btn" data-tool="goma" title="Borrar Líneas">🧹</button>
         </div>
 
         <div class="control-group">
@@ -135,9 +134,10 @@
         <div class="control-group">
             <label>Tempo:</label>
             <select id="tempoSelect">
-                <option value="1">Lento</option>
-                <option value="2" selected>Normal</option>
-                <option value="3.5">Rápido</option>
+                <option value="0.5">Muy Lento</option>
+                <option value="1" selected>Lento</option>
+                <option value="1.8">Normal</option>
+                <option value="3">Rápido</option>
             </select>
         </div>
 
@@ -173,7 +173,7 @@
         let isDrawing = false;
         let currentColor = '#ff4757';
         let currentTimbre = 'sine';
-        let activePercussionTool = null; // null significa modo Lápiz activo
+        let activeTool = null; // null = Lápiz continuo
         let isPlaying = false;
         let showGrid = false;
         let scanX = 0;
@@ -197,16 +197,14 @@
             if (history.length > 25) history.shift();
         }
 
-        // Mapeo de colores visuales a propiedades de audio de identificación en el canal rojo (AudioRed)
         const colorAudioMap = {
-            '#ff4757': { type: 'sine',     audioRed: 10 },
-            '#2ed573': { type: 'triangle', audioRed: 20 },
-            '#1e90ff': { type: 'sawtooth', audioRed: 30 },
-            '#ffa502': { type: 'square',   audioRed: 40 },
-            '#9b59b6': { type: 'sine',     audioRed: 50 } // Sub bass especial
+            '#ff4757': { type: 'sine',     audioRed: 10, volume: 0.20 },
+            '#2ed573': { type: 'triangle', audioRed: 20, volume: 0.22 },
+            '#1e90ff': { type: 'sawtooth', audioRed: 30, volume: 0.08 }, // Volumen reducido por ser brillante
+            '#ffa502': { type: 'square',   audioRed: 40, volume: 0.07 }, // Volumen reducido por ser chiptune
+            '#9b59b6': { type: 'sine',     audioRed: 50, volume: 0.15 }  // Sub-bass equilibrado
         };
 
-        // Escalas corregidas: Menor (más grave y oscura) y Mayor (más brillante)
         const scales = {
             menor: [110.00, 130.81, 146.83, 164.81, 196.00, 220.00, 261.63, 293.66, 329.63, 392.00, 440.00],
             mayor: [130.81, 164.81, 196.00, 220.00, 246.94, 261.63, 329.63, 392.00, 440.00, 493.88, 523.25]
@@ -263,7 +261,6 @@
         audioCtx2D.clearRect(0, 0, audioCanvas.width, audioCanvas.height);
         saveState();
 
-        // Control de selección de Timbres (Colores)
         document.querySelectorAll('.color-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
@@ -271,18 +268,17 @@
                 e.target.classList.add('active');
                 currentColor = e.target.dataset.color;
                 currentTimbre = e.target.dataset.timbre;
-                activePercussionTool = null; // Volvemos a modo Lápiz continuo
+                activeTool = null; 
             });
         });
 
-        // Control de herramientas de percusión y borrador
         document.querySelectorAll('.tool-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
                 document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
                 const targetBtn = e.target.closest('button');
                 targetBtn.classList.add('active');
-                activePercussionTool = targetBtn.dataset.tool;
+                activeTool = targetBtn.dataset.tool;
             });
         });
 
@@ -308,7 +304,7 @@
             e.preventDefault();
             const pos = getPos(e);
             
-            const isPercussion = activePercussionTool && ['kick', 'hihat', 'snare'].includes(activePercussionTool);
+            const isPercussion = activeTool && ['kick', 'hihat', 'snare'].includes(activeTool);
             const targetX = isPercussion ? quantizeXForDrums(pos.x) : pos.x;
 
             saveState();
@@ -317,9 +313,9 @@
             lastY = pos.y;
             
             if (isPercussion) {
-                drawShape(targetX, pos.y);
+                toggleOrDrawPercussion(targetX, pos.y);
                 renderScene();
-            } else if (activePercussionTool === 'goma') {
+            } else if (activeTool === 'goma') {
                 eraseAt(pos.x, pos.y);
                 renderScene();
             }
@@ -330,18 +326,17 @@
             e.preventDefault();
             const pos = getPos(e);
             
-            if (activePercussionTool && activePercussionTool !== 'goma') return;
+            if (activeTool && activeTool !== 'goma') return;
 
             const size = parseInt(document.getElementById('sizeRange').value);
 
-            if (activePercussionTool === 'goma') {
+            if (activeTool === 'goma') {
                 eraseAt(pos.x, pos.y);
                 lastX = pos.x; lastY = pos.y;
                 renderScene();
                 return;
             }
 
-            // Dibuja trazo continuo con el color/timbre seleccionado
             const audioProp = colorAudioMap[currentColor];
             const audioColorStr = `rgb(${audioProp.audioRed}, ${size}, 0)`;
 
@@ -368,47 +363,65 @@
             audioCtx2D.clearRect(x - size*1.5, y - size*1.5, size*3, size*3);
             ctx.restore(); audioCtx2D.restore();
             
-            if (history.length > 0) {
-                history[history.length - 1].main = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                history[history.length - 1].audio = audioCtx2D.getImageData(0, 0, audioCanvas.width, audioCanvas.height);
-            }
+            updateHistoryState();
         }
 
-        function drawShape(x, y) {
-            const rawSize = parseInt(document.getElementById('sizeRange').value);
-            const size = Math.max(rawSize * 1.5, 12);
-            
+        // Si ya hay una percusión en esa celda exacta, la borra; sino, la coloca.
+        function toggleOrDrawPercussion(x, y) {
             let audioRedVal = 60;
-            if (activePercussionTool === 'hihat') audioRedVal = 70;
-            if (activePercussionTool === 'snare') audioRedVal = 80;
+            if (activeTool === 'hihat') audioRedVal = 70;
+            if (activeTool === 'snare') audioRedVal = 80;
 
-            const audioColorStr = `rgb(${audioRedVal}, ${rawSize}, 0)`;
+            // Verificamos si ya existe un punto de audio en esa posición exacta
+            const existingData = audioCtx2D.getImageData(Math.floor(x), Math.floor(y), 1, 1).data;
+            const existingAlpha = existingData[3];
+            const existingRed = existingData[0];
 
-            ctx.save(); audioCtx2D.save();
-            
-            if (activePercussionTool === 'kick') {
-                ctx.fillStyle = '#ff4757'; ctx.beginPath(); ctx.arc(x, y, size, 0, Math.PI * 2); ctx.fill();
-            } else if (activePercussionTool === 'hihat') {
-                ctx.fillStyle = '#2ed573'; ctx.beginPath();
-                ctx.moveTo(x, y - size); ctx.lineTo(x - size, y + size); ctx.lineTo(x + size, y + size); ctx.closePath(); ctx.fill();
-            } else if (activePercussionTool === 'snare') {
-                ctx.fillStyle = '#1e90ff'; ctx.fillRect(x - size, y - size, size * 2, size * 2);
+            if (existingAlpha > 15 && Math.round(existingRed / 10) * 10 === audioRedVal) {
+                // Borrar la percusión existente (limpiar audio y limpiar visual en un radio de 20px)
+                audioCtx2D.clearRect(x - 10, y - 10, 20, 20);
+                
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(x, y, 20, 0, Math.PI * 2);
+                ctx.fillStyle = '#ffffff';
+                ctx.fill();
+                ctx.restore();
+            } else {
+                // Dibujar nueva percusión
+                const rawSize = parseInt(document.getElementById('sizeRange').value);
+                const size = Math.max(rawSize * 1.5, 12);
+                const audioColorStr = `rgb(${audioRedVal}, ${rawSize}, 0)`;
+
+                ctx.save(); audioCtx2D.save();
+                
+                if (activeTool === 'kick') {
+                    ctx.fillStyle = '#ff4757'; ctx.beginPath(); ctx.arc(x, y, size, 0, Math.PI * 2); ctx.fill();
+                } else if (activeTool === 'hihat') {
+                    ctx.fillStyle = '#2ed573'; ctx.beginPath();
+                    ctx.moveTo(x, y - size); ctx.lineTo(x - size, y + size); ctx.lineTo(x + size, y + size); ctx.closePath(); ctx.fill();
+                } else if (activeTool === 'snare') {
+                    ctx.fillStyle = '#1e90ff'; ctx.fillRect(x - size, y - size, size * 2, size * 2);
+                }
+
+                audioCtx2D.fillStyle = audioColorStr;
+                audioCtx2D.fillRect(x - 1, y - 1, 2, 2);
+                
+                ctx.restore(); audioCtx2D.restore();
             }
 
-            audioCtx2D.fillStyle = audioColorStr;
-            audioCtx2D.fillRect(x - 1, y - 1, 2, 2); // Micropunto oculto para audio limpio
-            
-            ctx.restore(); audioCtx2D.restore();
-            
-            if (history.length > 0) {
-                history[history.length - 1].main = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                history[history.length - 1].audio = audioCtx2D.getImageData(0, 0, audioCanvas.width, audioCanvas.height);
-            }
+            updateHistoryState();
         }
 
         function drawLine(context, x1, y1, x2, y2) {
             context.beginPath(); context.moveTo(x1, y1); context.lineTo(x2, y2); context.stroke();
-            if (context === ctx && history.length > 0) {
+            if (context === ctx) {
+                updateHistoryState();
+            }
+        }
+
+        function updateHistoryState() {
+            if (history.length > 0) {
                 history[history.length - 1].main = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 history[history.length - 1].audio = audioCtx2D.getImageData(0, 0, audioCanvas.width, audioCanvas.height);
             }
@@ -432,6 +445,7 @@
             }
         });
 
+        // Botón limpiar todo corregido: borra tanto el canvas visual como el de audio por completo
         document.getElementById('clearBtn').addEventListener('click', () => {
             saveState();
             ctx.fillStyle = '#ffffff';
@@ -455,7 +469,6 @@
             if (!audioCtx) {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 
-                // --- CADENA DE MASTERIZACIÓN: COMPRESOR + LIMITADOR ---
                 compressorNode = audioCtx.createDynamicsCompressor();
                 compressorNode.threshold.setValueAtTime(-18, audioCtx.currentTime);
                 compressorNode.knee.setValueAtTime(20, audioCtx.currentTime);
@@ -463,7 +476,6 @@
                 compressorNode.attack.setValueAtTime(0.005, audioCtx.currentTime);
                 compressorNode.release.setValueAtTime(0.1, audioCtx.currentTime);
 
-                // Limitador final para evitar saturación de picos
                 limiterNode = audioCtx.createDynamicsCompressor();
                 limiterNode.threshold.setValueAtTime(-2, audioCtx.currentTime);
                 limiterNode.knee.setValueAtTime(0, audioCtx.currentTime);
@@ -474,7 +486,6 @@
                 masterGain = audioCtx.createGain();
                 masterGain.gain.value = 2.0; 
 
-                // Conexiones en cadena: MasterGain -> Compresor -> Limitador -> Destino
                 masterGain.connect(compressorNode);
                 compressorNode.connect(limiterNode);
                 limiterNode.connect(audioCtx.destination);
@@ -559,11 +570,10 @@
 
             const now = audioCtx.currentTime;
 
-            // Procesamiento de timbres melódicos continuos
             for (const timbre in continuousTargets) {
                 let targets = Array.from(continuousTargets[timbre].entries()).map(([noteIdx, intensity]) => {
                     let freq = currentScale[Math.min(noteIdx, currentScale.length - 1)];
-                    if (timbre === 'subsine') freq = freq * 0.5; // Octava más baja para el sub-bass
+                    if (timbre === 'subsine') freq = freq * 0.5;
                     return { freq, intensity };
                 });
                 targets.sort((a, b) => a.freq - b.freq);
@@ -583,7 +593,8 @@
                         oscObj.missingFrames = 0; 
                         oscObj.osc.frequency.setTargetAtTime(target.freq, now, 0.05);
                         
-                        const vol = 0.22 * target.intensity;
+                        const baseVol = (timbre === 'sawtooth') ? 0.08 : (timbre === 'square' ? 0.07 : 0.20);
+                        const vol = baseVol * target.intensity;
                         oscObj.gainNode.gain.setTargetAtTime(vol, now, 0.03);
                         oscObj.freq = target.freq;
                         nextActive.push(oscObj);
@@ -596,7 +607,7 @@
                     } else if (i < active.length) {
                         let oscObj = active[i];
                         oscObj.missingFrames = (oscObj.missingFrames || 0) + 1;
-                        if (oscObj.missingFrames > 12) { 
+                        if (oscObj.missingFrames > 15) { 
                             stopContinuousTone(oscObj);
                         } else {
                             nextActive.push(oscObj); 
@@ -606,12 +617,11 @@
                 continuousTones[timbre] = nextActive;
             }
 
-            // Disparador de percusión con cooldown limpio
             for (const drum of ['kick', 'hihat', 'snare']) {
                 if (drumsInColumn[drum] > 0) {
                     if (drumCooldown[drum] === 0) {
                         playPercussion(drum, drumsInColumn[drum]);
-                        drumCooldown[drum] = 30; 
+                        drumCooldown[drum] = 35; // Cooldown seguro para evitar solapamientos a tiempo
                     }
                 }
             }
@@ -622,7 +632,10 @@
             const gainNode = audioCtx.createGain();
             osc.type = (timbre === 'subsine') ? 'sine' : timbre;
             osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-            const baseGain = 0.22 * intensity; 
+            
+            const baseVol = (timbre === 'sawtooth') ? 0.08 : (timbre === 'square' ? 0.07 : 0.20);
+            const baseGain = baseVol * intensity; 
+            
             gainNode.gain.setValueAtTime(0.0001, audioCtx.currentTime);
             gainNode.gain.exponentialRampToValueAtTime(baseGain, audioCtx.currentTime + 0.05);
             osc.connect(gainNode);
