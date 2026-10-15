@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Paint Musical</title>
+    <title>Paint Musical - TR-909 PRO Color Timbres</title>
     <style>
         body {
             margin: 0;
@@ -17,6 +17,7 @@
             touch-action: none;
         }
         h1 { margin: 5px 0; font-size: 1.3rem; text-align: center; }
+        p { margin: 0 0 8px 0; color: #a0a0c0; font-size: 0.8rem; text-align: center; }
         
         #controls {
             display: flex;
@@ -28,12 +29,12 @@
             align-items: center;
             flex-wrap: wrap;
             justify-content: center;
-            max-width: 600px;
+            max-width: 560px;
         }
         .control-group {
             display: flex;
             align-items: center;
-            gap: 4px;
+            gap: 5px;
             font-size: 0.75rem;
         }
         button, select, input {
@@ -50,14 +51,22 @@
         button:hover, select:hover { background: #3b3bfc; }
         button.active { background: #ff7675; }
         
-        input[type="color"] {
-            border: none;
-            width: 30px;
+        /* Botones de colores para los timbres */
+        .color-btn {
+            width: 26px;
             height: 26px;
+            border-radius: 50%;
+            border: 2px solid #fff;
             padding: 0;
             cursor: pointer;
-            background: none;
+            transition: transform 0.1s, box-shadow 0.1s;
         }
+        .color-btn.active {
+            transform: scale(1.2);
+            box-shadow: 0 0 8px #fff;
+            border: 2px solid #ffeaa7;
+        }
+
         input[type="range"] {
             width: 65px;
         }
@@ -83,47 +92,39 @@
             cursor: crosshair;
         }
 
-        #gridCanvas {
-            pointer-events: none;
-            display: none;
-        }
-
         #scanLine {
             position: absolute;
             top: 0;
             left: 0;
             width: 2px;
             height: 100%;
-            background: #ff4757;
+            background: rgba(0, 0, 0, 0.4);
             pointer-events: none;
             display: none;
-            box-shadow: 0 0 8px #ff4757;
         }
     </style>
 </head>
 <body>
 
-    <h1>Paint Musical</h1>
+    <h1>Paint Musical & TR-909 PRO</h1>
+    <p>Dibujo lineal por colores (timbres) + Percusiones cuantizadas.</p>
 
     <div id="controls">
-        <div class="control-group">
-            <button class="tool-btn active" data-tool="lapiz" title="Lápiz">✏️</button>
-            <button class="tool-btn" data-tool="crayon" title="Crayón">🖍️</button>
-            <button class="tool-btn" data-tool="fibra" title="Fibra">✒️</button>
-            <button class="tool-btn" data-tool="pincel" title="Pincel">🖌️</button>
-            <button class="tool-btn" data-tool="aerosol" title="Spray">💨</button>
+        <!-- Selector de Timbres mediante Colores -->
+        <div class="control-group" title="Timbres de Melodía">
+            <button class="color-btn active" data-color="#ff4757" data-timbre="sine" style="background: #ff4757;" title="Rojo: Senoidal"></button>
+            <button class="color-btn" data-color="#2ed573" data-timbre="triangle" style="background: #2ed573;" title="Verde: Triangular"></button>
+            <button class="color-btn" data-color="#1e90ff" data-timbre="sawtooth" style="background: #1e90ff;" title="Azul: Sierra"></button>
+            <button class="color-btn" data-color="#ffa502" data-timbre="square" style="background: #ffa502;" title="Amarillo: Cuadrada"></button>
+            <button class="color-btn" data-color="#9b59b6" data-timbre="subsine" style="background: #9b59b6;" title="Violeta: Sub-bass"></button>
         </div>
 
+        <!-- Herramientas de Percusión y Borrador -->
         <div class="control-group">
-            <button class="tool-btn" data-tool="kick" title="Kick">⭕</button>
-            <button class="tool-btn" data-tool="hihat" title="Hi-Hat">🔺</button>
-            <button class="tool-btn" data-tool="snare" title="Snare">⬜</button>
-            <button class="tool-btn" data-tool="clap" title="Clap">👏</button>
-            <button class="tool-btn" data-tool="goma" title="Borrar">❌</button>
-        </div>
-
-        <div class="control-group">
-            <input type="color" id="colorPicker" value="#000000" title="Color">
+            <button class="tool-btn" data-tool="kick" title="Kick 909">⭕ Kick</button>
+            <button class="tool-btn" data-tool="hihat" title="Hi-Hat 909">🔺 Hat</button>
+            <button class="tool-btn" data-tool="snare" title="Snare 909">⬜ Snare</button>
+            <button class="tool-btn" data-tool="goma" title="Borrar">🧹</button>
         </div>
 
         <div class="control-group">
@@ -132,19 +133,19 @@
         </div>
 
         <div class="control-group">
-            <label>Escala:</label>
-            <select id="scaleSelect">
-                <option value="pentatonic_menor" selected>Penta Menor</option>
-                <option value="pentatonic_mayor">Penta Mayor</option>
+            <label>Tempo:</label>
+            <select id="tempoSelect">
+                <option value="1">Lento</option>
+                <option value="2" selected>Normal</option>
+                <option value="3.5">Rápido</option>
             </select>
         </div>
 
         <div class="control-group">
-            <label>Tempo:</label>
-            <select id="tempoSelect">
-                <option value="180">Lento</option>
-                <option value="250" selected>Normal</option>
-                <option value="340">Rápido</option>
+            <label>Escala:</label>
+            <select id="scaleSelect">
+                <option value="menor">Menor (Grave/Oscura)</option>
+                <option value="mayor">Mayor (Brillante)</option>
             </select>
         </div>
 
@@ -158,7 +159,6 @@
 
     <div class="canvas-container">
         <canvas id="canvas" width="500" height="500"></canvas>
-        <canvas id="gridCanvas" width="500" height="500"></canvas>
         <canvas id="audioCanvas" width="500" height="500" style="display:none;"></canvas>
         <div id="scanLine"></div>
     </div>
@@ -168,123 +168,129 @@
         const ctx = canvas.getContext('2d');
         const audioCanvas = document.getElementById('audioCanvas');
         const audioCtx2D = audioCanvas.getContext('2d');
-        const gridCanvas = document.getElementById('gridCanvas');
-        const gridCtx = gridCanvas.getContext('2d');
         const scanLine = document.getElementById('scanLine');
 
-        const STEPS = 16; 
-        const ROWS = 11;
-
         let isDrawing = false;
-        let currentTool = 'lapiz';
+        let currentColor = '#ff4757';
+        let currentTimbre = 'sine';
+        let activePercussionTool = null; // null significa modo Lápiz activo
         let isPlaying = false;
-        
-        // --- Variables del motor de tiempo reconstruido ---
-        let totalPlayheadX = 0;
-        let lastTime = 0;
-        let lastScheduledAbsoluteStep = -1;
-        let lastColIndex = -1;
-        // ---------------------------------------------------
-
-        let showGrid = false; 
-        let activeSynths = { lapiz: [], crayon: [], fibra: [], pincel: [] };
+        let showGrid = false;
+        let scanX = 0;
         
         let audioCtx = null;
         let masterGain = null;
-        let masterCompressor = null;
+        let compressorNode = null;
+        let limiterNode = null;
         
-        let drumSequence = Array(STEPS).fill(null).map(() => ([]));
+        let continuousTones = {}; 
+        let drumCooldown = { kick: 0, hihat: 0, snare: 0 };
         let history = [];
 
-        // Dibujar Grilla
-        gridCtx.strokeStyle = 'rgba(200, 200, 220, 0.7)';
-        gridCtx.lineWidth = 1;
-        gridCtx.setLineDash([4, 4]);
-        for (let i = 1; i < STEPS; i++) {
-            const x = (gridCanvas.width / STEPS) * i;
-            gridCtx.beginPath(); gridCtx.moveTo(x, 0); gridCtx.lineTo(x, gridCanvas.height); gridCtx.stroke();
-        }
-        for (let i = 1; i < ROWS; i++) {
-            const y = (gridCanvas.height / ROWS) * i;
-            gridCtx.beginPath(); gridCtx.moveTo(0, y); gridCtx.lineTo(gridCanvas.width, y); gridCtx.stroke();
-        }
-
-        function initAudio() {
-            if (audioCtx) {
-                if (audioCtx.state === 'suspended') audioCtx.resume();
-                return;
-            }
-            const AudioContext = window.AudioContext || window.webkitAudioContext;
-            audioCtx = new AudioContext();
-            
-            masterCompressor = audioCtx.createDynamicsCompressor();
-            masterCompressor.threshold.value = -3;
-            masterCompressor.knee.value = 10;
-            masterCompressor.ratio.value = 4;
-            masterCompressor.attack.value = 0.01;
-            masterCompressor.release.value = 0.1;
-
-            masterGain = audioCtx.createGain();
-            masterGain.gain.value = 0.9; 
-
-            masterGain.connect(masterCompressor);
-            masterCompressor.connect(audioCtx.destination);
-            
-            if (audioCtx.state === 'suspended') audioCtx.resume();
-        }
-
-        window.addEventListener('mousedown', initAudio, { once: true });
-        window.addEventListener('touchstart', initAudio, { once: true });
+        const STEPS = 16; 
 
         function saveState() {
             history.push({
                 main: ctx.getImageData(0, 0, canvas.width, canvas.height),
-                audio: audioCtx2D.getImageData(0, 0, audioCanvas.width, audioCanvas.height),
-                drums: JSON.parse(JSON.stringify(drumSequence))
+                audio: audioCtx2D.getImageData(0, 0, audioCanvas.width, audioCanvas.height)
             });
             if (history.length > 25) history.shift();
         }
 
-        const toolAudioMap = {
-            lapiz:   { type: 'sine',     audioRed: 10 },
-            crayon:  { type: 'triangle', audioRed: 20 },
-            fibra:   { type: 'sawtooth', audioRed: 30 },
-            pincel:  { type: 'sine',     audioRed: 40 },
-            aerosol: { type: 'square',   audioRed: 50 }
+        // Mapeo de colores visuales a propiedades de audio de identificación en el canal rojo (AudioRed)
+        const colorAudioMap = {
+            '#ff4757': { type: 'sine',     audioRed: 10 },
+            '#2ed573': { type: 'triangle', audioRed: 20 },
+            '#1e90ff': { type: 'sawtooth', audioRed: 30 },
+            '#ffa502': { type: 'square',   audioRed: 40 },
+            '#9b59b6': { type: 'sine',     audioRed: 50 } // Sub bass especial
         };
 
+        // Escalas corregidas: Menor (más grave y oscura) y Mayor (más brillante)
         const scales = {
-            pentatonic_mayor: [130.81, 146.83, 164.81, 196.00, 220.00, 261.63, 293.66, 329.63, 392.00, 440.00, 523.25],
-            pentatonic_menor: [130.81, 155.56, 174.61, 196.00, 233.08, 261.63, 311.13, 349.23, 392.00, 466.16, 523.25]
+            menor: [110.00, 130.81, 146.83, 164.81, 196.00, 220.00, 261.63, 293.66, 329.63, 392.00, 440.00],
+            mayor: [130.81, 164.81, 196.00, 220.00, 246.94, 261.63, 329.63, 392.00, 440.00, 493.88, 523.25]
         };
 
-        function quantizePos(x, y) {
-            const cellW = canvas.width / STEPS;
-            const cellH = canvas.height / ROWS;
-            const col = Math.min(STEPS - 1, Math.max(0, Math.floor(x / cellW)));
-            const row = Math.min(ROWS - 1, Math.max(0, Math.floor(y / cellH)));
-            return { col, row, x: (col * cellW) + (cellW / 2), y: (row * cellH) + (cellH / 2), rectX: col * cellW, rectY: row * cellH, cellW, cellH };
+        function renderScene() {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if (history.length > 0) {
+                const currentState = history[history.length - 1];
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = canvas.width;
+                tempCanvas.height = canvas.height;
+                const tempCtx = tempCanvas.getContext('2d');
+                tempCtx.putImageData(currentState.main, 0, 0);
+                ctx.drawImage(tempCanvas, 0, 0);
+            }
+
+            if (showGrid) {
+                ctx.save();
+                ctx.strokeStyle = '#2d2d3a'; 
+                ctx.lineWidth = 1;
+                ctx.setLineDash([3, 3]);
+
+                for (let i = 1; i < STEPS; i++) {
+                    const x = (canvas.width / STEPS) * i;
+                    ctx.beginPath();
+                    ctx.moveTo(x, 0);
+                    ctx.lineTo(x, canvas.height);
+                    ctx.stroke();
+                }
+
+                const notesCount = 11;
+                for (let i = 1; i < notesCount; i++) {
+                    const y = (canvas.height / notesCount) * i;
+                    ctx.beginPath();
+                    ctx.moveTo(0, y);
+                    ctx.lineTo(canvas.width, y);
+                    ctx.stroke();
+                }
+                ctx.restore();
+            }
         }
 
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        function quantizeXForDrums(x) {
+            const stepWidth = canvas.width / STEPS;
+            const stepIndex = Math.round((x - (stepWidth / 2)) / stepWidth);
+            const clampedIndex = Math.max(0, Math.min(stepIndex, STEPS - 1));
+            return (clampedIndex * stepWidth) + (stepWidth / 2);
+        }
+
+        renderScene();
         audioCtx2D.clearRect(0, 0, audioCanvas.width, audioCanvas.height);
         saveState();
+
+        // Control de selección de Timbres (Colores)
+        document.querySelectorAll('.color-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                currentColor = e.target.dataset.color;
+                currentTimbre = e.target.dataset.timbre;
+                activePercussionTool = null; // Volvemos a modo Lápiz continuo
+            });
+        });
+
+        // Control de herramientas de percusión y borrador
+        document.querySelectorAll('.tool-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+                const targetBtn = e.target.closest('button');
+                targetBtn.classList.add('active');
+                activePercussionTool = targetBtn.dataset.tool;
+            });
+        });
 
         document.getElementById('gridBtn').addEventListener('click', (e) => {
             showGrid = !showGrid;
             e.target.classList.toggle('active', showGrid);
             e.target.textContent = showGrid ? 'Grilla: ON' : 'Grilla: OFF';
-            gridCanvas.style.display = showGrid ? 'block' : 'none';
-        });
-
-        document.querySelectorAll('.tool-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
-                const targetBtn = e.target.closest('button');
-                targetBtn.classList.add('active');
-                currentTool = targetBtn.dataset.tool;
-            });
+            renderScene();
         });
 
         function getPos(e) {
@@ -300,23 +306,22 @@
 
         function startDown(e) {
             e.preventDefault();
-            initAudio(); 
             const pos = getPos(e);
-            const isPercussion = ['kick', 'hihat', 'snare', 'clap'].includes(currentTool);
+            
+            const isPercussion = activePercussionTool && ['kick', 'hihat', 'snare'].includes(activePercussionTool);
+            const targetX = isPercussion ? quantizeXForDrums(pos.x) : pos.x;
+
             saveState();
             isDrawing = true;
-            lastX = pos.x; lastY = pos.y;
+            lastX = targetX; 
+            lastY = pos.y;
             
             if (isPercussion) {
-                const q = quantizePos(pos.x, pos.y);
-                if (!drumSequence[q.col].some(d => d.row === q.row && d.tool === currentTool)) {
-                    drumSequence[q.col].push({ tool: currentTool, row: q.row });
-                    drawShape(q.x, q.y, currentTool);
-                    // Suena inmediatamente al hacer clic
-                    playPercussion(currentTool, 1.0);
-                }
-            } else if (currentTool === 'goma') {
-                draw(e);
+                drawShape(targetX, pos.y);
+                renderScene();
+            } else if (activePercussionTool === 'goma') {
+                eraseAt(pos.x, pos.y);
+                renderScene();
             }
         }
 
@@ -324,323 +329,379 @@
             if (!isDrawing) return;
             e.preventDefault();
             const pos = getPos(e);
-            if (['kick', 'hihat', 'snare', 'clap'].includes(currentTool)) return;
+            
+            if (activePercussionTool && activePercussionTool !== 'goma') return;
 
-            const color = document.getElementById('colorPicker').value;
             const size = parseInt(document.getElementById('sizeRange').value);
 
-            if (currentTool === 'goma') {
-                ctx.save(); ctx.beginPath(); ctx.arc(pos.x, pos.y, size * 1.5, 0, Math.PI * 2);
-                ctx.fillStyle = '#ffffff'; ctx.fill(); ctx.restore();
-
-                audioCtx2D.save(); audioCtx2D.beginPath(); audioCtx2D.arc(pos.x, pos.y, size * 1.5, 0, Math.PI * 2);
-                audioCtx2D.globalCompositeOperation = 'destination-out';
-                audioCtx2D.fillStyle = 'rgba(0,0,0,1)'; audioCtx2D.fill();
-                audioCtx2D.globalCompositeOperation = 'source-over'; audioCtx2D.restore();
-                
-                const q = quantizePos(pos.x, pos.y);
-                drumSequence[q.col] = drumSequence[q.col].filter(d => d.row !== q.row);
-                lastX = pos.x; lastY = pos.y; return;
+            if (activePercussionTool === 'goma') {
+                eraseAt(pos.x, pos.y);
+                lastX = pos.x; lastY = pos.y;
+                renderScene();
+                return;
             }
 
-            const toolInfo = toolAudioMap[currentTool];
-            const audioColorStr = `rgb(${toolInfo.audioRed}, ${size}, 0)`;
+            // Dibuja trazo continuo con el color/timbre seleccionado
+            const audioProp = colorAudioMap[currentColor];
+            const audioColorStr = `rgb(${audioProp.audioRed}, ${size}, 0)`;
 
             ctx.lineWidth = size; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-            ctx.strokeStyle = color; ctx.fillStyle = color;
+            ctx.strokeStyle = currentColor; ctx.fillStyle = currentColor;
             
-            audioCtx2D.globalCompositeOperation = 'source-over'; audioCtx2D.globalAlpha = 1.0;
+            audioCtx2D.globalAlpha = 1.0;
             audioCtx2D.lineWidth = size; audioCtx2D.lineCap = 'round'; audioCtx2D.lineJoin = 'round';
             audioCtx2D.strokeStyle = audioColorStr; audioCtx2D.fillStyle = audioColorStr;
 
-            if (currentTool === 'aerosol') {
-                for (let i = 0; i < 10; i++) {
-                    const offsetX = (Math.random() - 0.5) * size * 2.5; const offsetY = (Math.random() - 0.5) * size * 2.5;
-                    ctx.globalAlpha = 0.3; ctx.fillRect(pos.x + offsetX, pos.y + offsetY, 2, 2);
-                    audioCtx2D.globalAlpha = 0.6; audioCtx2D.fillRect(pos.x + offsetX, pos.y + offsetY, 2, 2);
-                }
-                ctx.globalAlpha = 1.0; audioCtx2D.globalAlpha = 1.0;
-            } else {
-                drawLine(ctx, lastX, lastY, pos.x, pos.y); 
-                drawLine(audioCtx2D, lastX, lastY, pos.x, pos.y);
-            }
+            drawLine(ctx, lastX, lastY, pos.x, pos.y);
+            drawLine(audioCtx2D, lastX, lastY, pos.x, pos.y);
+
             lastX = pos.x; lastY = pos.y;
+            renderScene();
         }
 
-        function drawShape(x, y, tool) {
+        function eraseAt(x, y) {
+            const size = parseInt(document.getElementById('sizeRange').value);
+            ctx.save(); audioCtx2D.save();
+            ctx.beginPath(); audioCtx2D.beginPath();
+            ctx.arc(x, y, size * 1.5, 0, Math.PI * 2);
+            ctx.fillStyle = '#ffffff'; ctx.fill();
+            audioCtx2D.clearRect(x - size*1.5, y - size*1.5, size*3, size*3);
+            ctx.restore(); audioCtx2D.restore();
+            
+            if (history.length > 0) {
+                history[history.length - 1].main = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                history[history.length - 1].audio = audioCtx2D.getImageData(0, 0, audioCanvas.width, audioCanvas.height);
+            }
+        }
+
+        function drawShape(x, y) {
             const rawSize = parseInt(document.getElementById('sizeRange').value);
-            const size = Math.max(rawSize * 1.5, 14); 
-            ctx.save();
-            if (tool === 'kick') { ctx.fillStyle = '#ff4757'; ctx.beginPath(); ctx.arc(x, y, size, 0, Math.PI * 2); ctx.fill(); }
-            else if (tool === 'hihat') { ctx.fillStyle = '#2ed573'; ctx.beginPath(); ctx.moveTo(x, y - size); ctx.lineTo(x - size, y + size); ctx.lineTo(x + size, y + size); ctx.closePath(); ctx.fill(); }
-            else if (tool === 'snare') { ctx.fillStyle = '#1e90ff'; ctx.fillRect(x - size, y - size, size * 2, size * 2); }
-            else if (tool === 'clap') { ctx.fillStyle = '#ffa502'; ctx.beginPath(); ctx.moveTo(x, y - size); ctx.lineTo(x + size, y); ctx.lineTo(x, y + size); ctx.lineTo(x - size, y); ctx.closePath(); ctx.fill(); }
-            ctx.restore();
+            const size = Math.max(rawSize * 1.5, 12);
+            
+            let audioRedVal = 60;
+            if (activePercussionTool === 'hihat') audioRedVal = 70;
+            if (activePercussionTool === 'snare') audioRedVal = 80;
+
+            const audioColorStr = `rgb(${audioRedVal}, ${rawSize}, 0)`;
+
+            ctx.save(); audioCtx2D.save();
+            
+            if (activePercussionTool === 'kick') {
+                ctx.fillStyle = '#ff4757'; ctx.beginPath(); ctx.arc(x, y, size, 0, Math.PI * 2); ctx.fill();
+            } else if (activePercussionTool === 'hihat') {
+                ctx.fillStyle = '#2ed573'; ctx.beginPath();
+                ctx.moveTo(x, y - size); ctx.lineTo(x - size, y + size); ctx.lineTo(x + size, y + size); ctx.closePath(); ctx.fill();
+            } else if (activePercussionTool === 'snare') {
+                ctx.fillStyle = '#1e90ff'; ctx.fillRect(x - size, y - size, size * 2, size * 2);
+            }
+
+            audioCtx2D.fillStyle = audioColorStr;
+            audioCtx2D.fillRect(x - 1, y - 1, 2, 2); // Micropunto oculto para audio limpio
+            
+            ctx.restore(); audioCtx2D.restore();
+            
+            if (history.length > 0) {
+                history[history.length - 1].main = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                history[history.length - 1].audio = audioCtx2D.getImageData(0, 0, audioCanvas.width, audioCanvas.height);
+            }
         }
 
-        function drawLine(context, x1, y1, x2, y2) { context.beginPath(); context.moveTo(x1, y1); context.lineTo(x2, y2); context.stroke(); }
+        function drawLine(context, x1, y1, x2, y2) {
+            context.beginPath(); context.moveTo(x1, y1); context.lineTo(x2, y2); context.stroke();
+            if (context === ctx && history.length > 0) {
+                history[history.length - 1].main = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                history[history.length - 1].audio = audioCtx2D.getImageData(0, 0, audioCanvas.width, audioCanvas.height);
+            }
+        }
+
         function stopDraw() { isDrawing = false; }
 
-        canvas.addEventListener('mousedown', startDown); canvas.addEventListener('mousemove', draw); window.addEventListener('mouseup', stopDraw);
-        canvas.addEventListener('touchstart', startDown, { passive: false }); canvas.addEventListener('touchmove', draw, { passive: false }); canvas.addEventListener('touchend', stopDraw);
+        canvas.addEventListener('mousedown', startDown);
+        canvas.addEventListener('mousemove', draw);
+        window.addEventListener('mouseup', stopDraw);
+        canvas.addEventListener('touchstart', startDown, { passive: false });
+        canvas.addEventListener('touchmove', draw, { passive: false });
+        canvas.addEventListener('touchend', stopDraw);
 
         document.getElementById('undoBtn').addEventListener('click', () => {
-            if (history.length > 0) {
-                const prevState = history.pop();
-                ctx.putImageData(prevState.main, 0, 0); audioCtx2D.putImageData(prevState.audio, 0, 0);
-                drumSequence = JSON.parse(JSON.stringify(prevState.drums));
+            if (history.length > 1) {
+                history.pop();
+                renderScene();
+                const prevState = history[history.length - 1];
+                audioCtx2D.putImageData(prevState.audio, 0, 0);
             }
         });
 
         document.getElementById('clearBtn').addEventListener('click', () => {
-            saveState(); 
-            ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            saveState();
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
             audioCtx2D.clearRect(0, 0, audioCanvas.width, audioCanvas.height);
-            drumSequence = Array(STEPS).fill(null).map(() => ([])); 
-            
-            totalPlayheadX = 0;
-            lastScheduledAbsoluteStep = -1;
-            lastColIndex = -1;
-            if (!isPlaying) {
-                scanLine.style.left = '0%';
-            }
+            renderScene();
         });
+
+        function stopAllActiveTones() {
+            for (const timbre in continuousTones) {
+                for (const tone of continuousTones[timbre]) {
+                    stopContinuousTone(tone);
+                }
+            }
+            continuousTones = {};
+            drumCooldown = { kick: 0, hihat: 0, snare: 0 };
+        }
 
         const playBtn = document.getElementById('playBtn');
         playBtn.addEventListener('click', () => {
-            initAudio(); 
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                
+                // --- CADENA DE MASTERIZACIÓN: COMPRESOR + LIMITADOR ---
+                compressorNode = audioCtx.createDynamicsCompressor();
+                compressorNode.threshold.setValueAtTime(-18, audioCtx.currentTime);
+                compressorNode.knee.setValueAtTime(20, audioCtx.currentTime);
+                compressorNode.ratio.setValueAtTime(8, audioCtx.currentTime);
+                compressorNode.attack.setValueAtTime(0.005, audioCtx.currentTime);
+                compressorNode.release.setValueAtTime(0.1, audioCtx.currentTime);
+
+                // Limitador final para evitar saturación de picos
+                limiterNode = audioCtx.createDynamicsCompressor();
+                limiterNode.threshold.setValueAtTime(-2, audioCtx.currentTime);
+                limiterNode.knee.setValueAtTime(0, audioCtx.currentTime);
+                limiterNode.ratio.setValueAtTime(20, audioCtx.currentTime);
+                limiterNode.attack.setValueAtTime(0.001, audioCtx.currentTime);
+                limiterNode.release.setValueAtTime(0.05, audioCtx.currentTime);
+
+                masterGain = audioCtx.createGain();
+                masterGain.gain.value = 2.0; 
+
+                // Conexiones en cadena: MasterGain -> Compresor -> Limitador -> Destino
+                masterGain.connect(compressorNode);
+                compressorNode.connect(limiterNode);
+                limiterNode.connect(audioCtx.destination);
+            }
+
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            
             isPlaying = !isPlaying;
             playBtn.classList.toggle('active', isPlaying);
             playBtn.textContent = isPlaying ? '⏸ Pausa' : '▶ Play';
             scanLine.style.display = isPlaying ? 'block' : 'none';
 
             if (!isPlaying) {
-                stopAllSynths();
-            } else {
-                lastTime = audioCtx.currentTime; 
-                lastColIndex = -1; // Forza reevaluar la columna al quitar pausa
+                stopAllActiveTones();
             }
         });
 
-        function stopAllSynths() {
-            Object.keys(activeSynths).forEach(tool => {
-                activeSynths[tool].forEach(synth => {
-                    try {
-                        synth.gain.gain.setTargetAtTime(0.0001, audioCtx.currentTime, 0.03);
-                        synth.osc.stop(audioCtx.currentTime + 0.1);
-                    } catch(e) {}
-                });
-                activeSynths[tool] = [];
-            });
-        }
-
-        // MOTOR DE TIEMPO CON LOOKAHEAD SCHEDULING
         function animate() {
             requestAnimationFrame(animate);
-            if (!isPlaying || !audioCtx) return;
+            if (!isPlaying) return;
 
-            const now = audioCtx.currentTime;
-            let dt = now - lastTime;
-            lastTime = now;
-            
-            // Limitar saltos grandes (por ej. si cambiás de pestaña)
-            if (dt > 0.1) dt = 0.1; 
-
-            const pps = parseFloat(document.getElementById('tempoSelect').value);
-            totalPlayheadX += dt * pps;
-
-            const currentX = totalPlayheadX % canvas.width;
-            scanLine.style.left = (currentX / canvas.width * 100) + '%';
-
-            // 1. Precise Lookahead Drum Scheduling (Separado del visual)
-            const lookaheadTime = 0.1; // Mira 100ms hacia el futuro
-            const lookaheadPixels = lookaheadTime * pps;
-            const targetTotalX = totalPlayheadX + lookaheadPixels;
-            
-            const stepWidth = canvas.width / STEPS;
-            const targetAbsoluteStep = Math.floor(targetTotalX / stepWidth);
-            
-            while (lastScheduledAbsoluteStep < targetAbsoluteStep) {
-                lastScheduledAbsoluteStep++;
-                const stepIndex = lastScheduledAbsoluteStep % STEPS;
-                
-                // Calculamos en qué milisegundo exacto tiene que sonar esto en el reloj de Audio
-                const pixelsInFuture = (lastScheduledAbsoluteStep * stepWidth) - totalPlayheadX;
-                const timeInFuture = pixelsInFuture / pps;
-                const scheduleTime = now + timeInFuture;
-                
-                drumSequence[stepIndex].forEach(drum => playPercussion(drum.tool, 1.0, scheduleTime));
+            for (const k in drumCooldown) {
+                if (drumCooldown[k] > 0) drumCooldown[k]--;
             }
 
-            // 2. Continuous Synths (El paint musical)
-            const colIndex = Math.floor(currentX);
-            if (colIndex !== lastColIndex && colIndex < audioCanvas.width) {
-                lastColIndex = colIndex;
-                processColumnAudio(colIndex, now);
-            }
+            const speed = parseFloat(document.getElementById('tempoSelect').value);
+            scanX += speed;
+            if (scanX > canvas.width) scanX = 0;
+
+            const percent = (scanX / canvas.width) * 100;
+            scanLine.style.left = percent + '%';
+
+            checkColumnAndPlay(scanX);
         }
 
-        function processColumnAudio(colIndex, now) {
+        function checkColumnAndPlay(x) {
+            const colIndex = Math.floor(x);
+            if (colIndex >= audioCanvas.width) return;
+
             const imgData = audioCtx2D.getImageData(colIndex, 0, 1, audioCanvas.height);
             const data = imgData.data;
-            const scaleType = document.getElementById('scaleSelect').value || 'pentatonic_menor';
+            
+            const scaleType = document.getElementById('scaleSelect').value;
             const currentScale = scales[scaleType];
+            
+            const continuousTargets = { sine: new Map(), triangle: new Map(), sawtooth: new Map(), square: new Map(), subsine: new Map() };
+            let drumsInColumn = { kick: 0, hihat: 0, snare: 0 };
 
-            let toolBlobs = { lapiz: [], crayon: [], fibra: [], pincel: [] };
-            let currentBlob = null;
-            let aerosolTriggered = false;
-
-            for (let y = 0; y < audioCanvas.height; y += 2) {
+            for (let y = 0; y < audioCanvas.height; y += 8) {
+                const r = data[(y * 4)];
+                const g = data[(y * 4) + 1]; 
                 const alpha = data[(y * 4) + 3];
-                let toolFound = null;
 
-                if (alpha > 20) {
-                    const r = data[(y * 4)];
-                    const rSnap = Math.round(r / 10) * 10;
-                    if (rSnap === 10) toolFound = 'lapiz';
-                    else if (rSnap === 20) toolFound = 'crayon';
-                    else if (rSnap === 30) toolFound = 'fibra';
-                    else if (rSnap === 40) toolFound = 'pincel';
-                    else if (rSnap === 50) {
-                        if (!aerosolTriggered) {
-                            const noteIndex = Math.floor(((audioCanvas.height - y) / audioCanvas.height) * currentScale.length);
-                            playShortTone(currentScale[Math.min(noteIndex, currentScale.length - 1)], 'square');
-                            aerosolTriggered = true;
+                if (alpha > 15) {
+                    const rSnap = Math.round(r / 10) * 10; 
+
+                    if (rSnap >= 10 && rSnap <= 50) {
+                        let timbre = 'sine';
+                        if (rSnap === 20) timbre = 'triangle';
+                        else if (rSnap === 30) timbre = 'sawtooth';
+                        else if (rSnap === 40) timbre = 'square';
+                        else if (rSnap === 50) timbre = 'subsine';
+
+                        const noteIndex = Math.floor(((audioCanvas.height - y) / audioCanvas.height) * currentScale.length);
+                        const drawnSize = g > 0 ? g : 4; 
+                        const intensity = Math.min(drawnSize / 8, 1.8);
+
+                        if (!continuousTargets[timbre].has(noteIndex)) {
+                            continuousTargets[timbre].set(noteIndex, intensity);
+                        } else {
+                            continuousTargets[timbre].set(noteIndex, Math.max(continuousTargets[timbre].get(noteIndex), intensity));
+                        }
+                    } else if (rSnap >= 60 && rSnap <= 80) {
+                        let drum = 'kick';
+                        if (rSnap === 70) drum = 'hihat';
+                        else if (rSnap === 80) drum = 'snare';
+                        const drawnSize = g > 0 ? g : 4; 
+                        drumsInColumn[drum] = Math.max(drumsInColumn[drum], Math.min(drawnSize / 8, 1.8));
+                    }
+                }
+            }
+
+            const now = audioCtx.currentTime;
+
+            // Procesamiento de timbres melódicos continuos
+            for (const timbre in continuousTargets) {
+                let targets = Array.from(continuousTargets[timbre].entries()).map(([noteIdx, intensity]) => {
+                    let freq = currentScale[Math.min(noteIdx, currentScale.length - 1)];
+                    if (timbre === 'subsine') freq = freq * 0.5; // Octava más baja para el sub-bass
+                    return { freq, intensity };
+                });
+                targets.sort((a, b) => a.freq - b.freq);
+
+                if (!continuousTones[timbre]) continuousTones[timbre] = [];
+                let active = continuousTones[timbre];
+                active.sort((a, b) => a.freq - b.freq);
+
+                let nextActive = [];
+                let maxLen = Math.max(targets.length, active.length);
+
+                for (let i = 0; i < maxLen; i++) {
+                    if (i < targets.length && i < active.length) {
+                        let oscObj = active[i];
+                        let target = targets[i];
+                        
+                        oscObj.missingFrames = 0; 
+                        oscObj.osc.frequency.setTargetAtTime(target.freq, now, 0.05);
+                        
+                        const vol = 0.22 * target.intensity;
+                        oscObj.gainNode.gain.setTargetAtTime(vol, now, 0.03);
+                        oscObj.freq = target.freq;
+                        nextActive.push(oscObj);
+                    } else if (i < targets.length) {
+                        let target = targets[i];
+                        let oscObj = startContinuousTone(target.freq, target.intensity, timbre);
+                        oscObj.freq = target.freq;
+                        oscObj.missingFrames = 0;
+                        nextActive.push(oscObj);
+                    } else if (i < active.length) {
+                        let oscObj = active[i];
+                        oscObj.missingFrames = (oscObj.missingFrames || 0) + 1;
+                        if (oscObj.missingFrames > 12) { 
+                            stopContinuousTone(oscObj);
+                        } else {
+                            nextActive.push(oscObj); 
                         }
                     }
                 }
+                continuousTones[timbre] = nextActive;
+            }
 
-                if (toolFound) {
-                    if (!currentBlob || currentBlob.tool !== toolFound) {
-                        if (currentBlob) toolBlobs[currentBlob.tool].push(currentBlob);
-                        currentBlob = { tool: toolFound, startY: y, endY: y };
-                    } else {
-                        currentBlob.endY = y;
-                    }
-                } else {
-                    if (currentBlob) {
-                        toolBlobs[currentBlob.tool].push(currentBlob);
-                        currentBlob = null;
+            // Disparador de percusión con cooldown limpio
+            for (const drum of ['kick', 'hihat', 'snare']) {
+                if (drumsInColumn[drum] > 0) {
+                    if (drumCooldown[drum] === 0) {
+                        playPercussion(drum, drumsInColumn[drum]);
+                        drumCooldown[drum] = 30; 
                     }
                 }
             }
-            if (currentBlob) toolBlobs[currentBlob.tool].push(currentBlob);
-
-            Object.keys(toolBlobs).forEach(tool => {
-                let blobs = toolBlobs[tool];
-                let freqs = blobs.map(b => {
-                    let centerY = (b.startY + b.endY) / 2;
-                    let noteIndex = Math.floor(((audioCanvas.height - centerY) / audioCanvas.height) * currentScale.length);
-                    return currentScale[Math.min(noteIndex, currentScale.length - 1)];
-                });
-
-                let synths = activeSynths[tool];
-                
-                freqs.sort((a, b) => a - b);
-                synths.sort((a, b) => a.currentFreq - b.currentFreq);
-
-                let newSynths = [];
-                let maxCount = Math.max(freqs.length, synths.length);
-
-                for (let i = 0; i < maxCount; i++) {
-                    if (i < freqs.length && i < synths.length) {
-                        let synth = synths[i];
-                        synth.osc.frequency.setTargetAtTime(freqs[i], now, 0.02);
-                        synth.currentFreq = freqs[i];
-                        synth.gain.gain.setTargetAtTime(0.18, now, 0.02);
-                        newSynths.push(synth);
-                    } else if (i < freqs.length) {
-                        const osc = audioCtx.createOscillator();
-                        const gain = audioCtx.createGain();
-                        osc.type = toolAudioMap[tool].type;
-                        osc.frequency.setValueAtTime(freqs[i], now);
-                        gain.gain.setValueAtTime(0.0001, now);
-                        gain.gain.linearRampToValueAtTime(0.18, now + 0.03);
-                        osc.connect(gain); gain.connect(masterGain);
-                        osc.start(now);
-                        newSynths.push({ osc, gain, currentFreq: freqs[i] });
-                    } else {
-                        let synth = synths[i];
-                        synth.gain.gain.setTargetAtTime(0.0001, now, 0.03);
-                        synth.osc.stop(now + 0.1);
-                    }
-                }
-                activeSynths[tool] = newSynths;
-            });
         }
 
-        function playShortTone(freq, type) {
+        function startContinuousTone(freq, intensity, timbre) {
             const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            osc.type = type;
-            osc.frequency.value = freq;
-            gain.gain.value = 0.15;
-            gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.15);
-            osc.connect(gain); gain.connect(masterGain);
-            osc.start(audioCtx.currentTime); osc.stop(audioCtx.currentTime + 0.2);
+            const gainNode = audioCtx.createGain();
+            osc.type = (timbre === 'subsine') ? 'sine' : timbre;
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            const baseGain = 0.22 * intensity; 
+            gainNode.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(baseGain, audioCtx.currentTime + 0.05);
+            osc.connect(gainNode);
+            gainNode.connect(masterGain); 
+            osc.start();
+            return { osc, gainNode, freq, missingFrames: 0 };
         }
 
-        // El parámetro `time` permite programar los golpes en el futuro
-        function playPercussion(type, intensity = 1.0, time = null) {
+        function stopContinuousTone(toneObj) {
             if (!audioCtx) return;
-            const now = time !== null ? time : audioCtx.currentTime;
+            const now = audioCtx.currentTime;
+            try {
+                toneObj.gainNode.gain.cancelScheduledValues(now);
+                toneObj.gainNode.gain.setValueAtTime(Math.max(toneObj.gainNode.gain.value, 0.0001), now);
+                toneObj.gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.1);
+                toneObj.osc.stop(now + 0.15);
+            } catch (e) {}
+        }
 
-            if (type === 'kick') {
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
-                osc.type = 'sine'; 
-                osc.frequency.setValueAtTime(130, now); 
-                osc.frequency.exponentialRampToValueAtTime(45, now + 0.06); 
-                gain.gain.setValueAtTime(1.8, now); 
-                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
-                osc.connect(gain); gain.connect(masterGain); 
-                osc.start(now); osc.stop(now + 0.3);
-            } else if (type === 'hihat') {
-                const bufferSize = audioCtx.sampleRate * 0.04;
-                const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-                const output = buffer.getChannelData(0); 
-                for (let i = 0; i < bufferSize; i++) output[i] = Math.random() * 2 - 1;
-                const noise = audioCtx.createBufferSource(); noise.buffer = buffer;
-                const filter = audioCtx.createBiquadFilter(); filter.type = 'highpass'; filter.frequency.value = 7000;
-                const gain = audioCtx.createGain(); 
-                gain.gain.setValueAtTime(0.7, now); 
-                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
-                noise.connect(filter); filter.connect(gain); gain.connect(masterGain); 
-                noise.start(now); noise.stop(now + 0.1);
-            } else if (type === 'snare') {
-                const osc = audioCtx.createOscillator(); const oscGain = audioCtx.createGain();
-                osc.type = 'triangle'; 
-                osc.frequency.setValueAtTime(220, now); 
-                osc.frequency.exponentialRampToValueAtTime(100, now + 0.05);
-                oscGain.gain.setValueAtTime(0.6, now); 
-                oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.08); 
-                osc.connect(oscGain); oscGain.connect(masterGain); 
-                osc.start(now); osc.stop(now + 0.1);
+        function playPercussion(type, intensity = 1.0) {
+            if (!audioCtx) return;
+            try {
+                const now = audioCtx.currentTime;
+                const volMultiplier = Math.min(intensity, 1.5);
 
-                const bufferSize = audioCtx.sampleRate * 0.1;
-                const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-                const output = buffer.getChannelData(0); 
-                for (let i = 0; i < bufferSize; i++) output[i] = Math.random() * 2 - 1;
-                const noise = audioCtx.createBufferSource(); noise.buffer = buffer;
-                const filter = audioCtx.createBiquadFilter(); filter.type = 'bandpass'; filter.frequency.value = 2500;
-                const noiseGain = audioCtx.createGain(); 
-                noiseGain.gain.setValueAtTime(0.7, now); 
-                noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.1); 
-                noise.connect(filter); filter.connect(noiseGain); noiseGain.connect(masterGain); 
-                noise.start(now); noise.stop(now + 0.15);
-            } else if (type === 'clap') {
-                const bufferSize = audioCtx.sampleRate * 0.15;
-                const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-                const output = buffer.getChannelData(0); 
-                for (let i = 0; i < bufferSize; i++) output[i] = Math.random() * 2 - 1;
-                const noise = audioCtx.createBufferSource(); noise.buffer = buffer;
-                const filter = audioCtx.createBiquadFilter(); filter.type = 'bandpass'; filter.frequency.value = 1500;
-                const gain = audioCtx.createGain(); 
-                gain.gain.setValueAtTime(0.8, now); 
-                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.02);
-                noise.connect(filter); filter.connect(gain); gain.connect(masterGain); 
-                noise.start(now); noise.stop(now + 0.25);
-            }
+                if (type === 'kick') {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(130, now);
+                    osc.frequency.exponentialRampToValueAtTime(45, now + 0.06); 
+                    
+                    gain.gain.setValueAtTime(1.8 * volMultiplier, now); 
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+                    
+                    osc.connect(gain); gain.connect(masterGain);
+                    osc.start(now); osc.stop(now + 0.3);
+
+                } else if (type === 'hihat') {
+                    const bufferSize = audioCtx.sampleRate * 0.04;
+                    const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                    const output = buffer.getChannelData(0);
+                    for (let i = 0; i < bufferSize; i++) output[i] = Math.random() * 2 - 1;
+                    const noise = audioCtx.createBufferSource();
+                    noise.buffer = buffer;
+                    const filter = audioCtx.createBiquadFilter();
+                    filter.type = 'highpass'; filter.frequency.value = 7000;
+                    const gain = audioCtx.createGain();
+                    gain.gain.setValueAtTime(0.7 * volMultiplier, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+                    noise.connect(filter); filter.connect(gain); gain.connect(masterGain);
+                    noise.start(now);
+
+                } else if (type === 'snare') {
+                    const osc = audioCtx.createOscillator();
+                    const oscGain = audioCtx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(220, now);
+                    osc.frequency.exponentialRampToValueAtTime(100, now + 0.08);
+                    oscGain.gain.setValueAtTime(0.6 * volMultiplier, now);
+                    oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+                    osc.connect(oscGain); oscGain.connect(masterGain);
+                    osc.start(now); osc.stop(now + 0.18);
+
+                    const bufferSize = audioCtx.sampleRate * 0.15;
+                    const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                    const output = buffer.getChannelData(0);
+                    for (let i = 0; i < bufferSize; i++) output[i] = Math.random() * 2 - 1;
+                    const noise = audioCtx.createBufferSource();
+                    noise.buffer = buffer;
+                    const filter = audioCtx.createBiquadFilter();
+                    filter.type = 'bandpass'; filter.frequency.value = 2000;
+                    const noiseGain = audioCtx.createGain();
+                    noiseGain.gain.setValueAtTime(0.7 * volMultiplier, now);
+                    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+                    noise.connect(filter); filter.connect(noiseGain); noiseGain.connect(masterGain);
+                    noise.start(now);
+                }
+            } catch (e) {}
         }
 
         animate();
