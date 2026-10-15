@@ -2,8 +2,8 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Paint Musical - TR-909 PRO Perfect Grid</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paint Musical - TR-909 PRO</title>
     <style>
         body {
             margin: 0;
@@ -14,11 +14,10 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            touch-action: none;
         }
         h1 { margin: 5px 0; font-size: 1.3rem; text-align: center; }
         p { margin: 0 0 8px 0; color: #a0a0c0; font-size: 0.8rem; text-align: center; }
-        
+
         #controls {
             display: flex;
             gap: 6px;
@@ -50,7 +49,7 @@
         }
         button:hover, select:hover { background: #3b3bfc; }
         button.active { background: #ff7675; }
-        
+
         .color-btn {
             width: 26px;
             height: 26px;
@@ -89,6 +88,7 @@
             width: 100%;
             height: 100%;
             cursor: crosshair;
+            touch-action: none;
         }
 
         #scanLine {
@@ -106,24 +106,22 @@
 <body>
 
     <h1>Paint Musical & TR-909 PRO</h1>
-    <p>Cuantización métrica exacta y borrado general funcional.</p>
+    <p>Dibujá para hacer música: horizontal = tiempo, vertical = altura de la nota.</p>
 
     <div id="controls">
-        <!-- Timbres melódicos -->
         <div class="control-group" title="Timbres de Melodía">
-            <button class="color-btn active" data-color="#ff4757" data-timbre="sine" style="background: #ff4757;" title="Rojo: Senoidal"></button>
-            <button class="color-btn" data-color="#2ed573" data-timbre="triangle" style="background: #2ed573;" title="Verde: Triangular"></button>
-            <button class="color-btn" data-color="#1e90ff" data-timbre="sawtooth" style="background: #1e90ff;" title="Azul: Sierra"></button>
-            <button class="color-btn" data-color="#ffa502" data-timbre="square" style="background: #ffa502;" title="Amarillo: Cuadrada"></button>
-            <button class="color-btn" data-color="#9b59b6" data-timbre="subsine" style="background: #9b59b6;" title="Violeta: Sub-bass"></button>
+            <button class="color-btn active" data-color="#ff4757" style="background: #ff4757;" title="Rojo: Senoidal"></button>
+            <button class="color-btn" data-color="#2ed573" style="background: #2ed573;" title="Verde: Triangular"></button>
+            <button class="color-btn" data-color="#1e90ff" style="background: #1e90ff;" title="Azul: Sierra"></button>
+            <button class="color-btn" data-color="#ffa502" style="background: #ffa502;" title="Amarillo: Cuadrada"></button>
+            <button class="color-btn" data-color="#9b59b6" style="background: #9b59b6;" title="Violeta: Sub-bass"></button>
         </div>
 
-        <!-- Percusiones y Borrador -->
         <div class="control-group">
             <button class="tool-btn" data-tool="kick" title="Kick 909">⭕ Kick</button>
             <button class="tool-btn" data-tool="hihat" title="Hi-Hat 909">🔺 Hat</button>
             <button class="tool-btn" data-tool="snare" title="Snare 909">⬜ Snare</button>
-            <button class="tool-btn" data-tool="goma" title="Borrar Líneas">🧹</button>
+            <button class="tool-btn" data-tool="goma" title="Borrar">🧹</button>
         </div>
 
         <div class="control-group">
@@ -134,10 +132,11 @@
         <div class="control-group">
             <label>Tempo:</label>
             <select id="tempoSelect">
-                <option value="0.5">Muy Lento</option>
-                <option value="1" selected>Lento</option>
-                <option value="1.8">Normal</option>
-                <option value="3">Rápido</option>
+                <option value="20">Muy lento (20 BPM)</option>
+                <option value="30" selected>Lento (30 BPM)</option>
+                <option value="60">Normal (60 BPM)</option>
+                <option value="90">Rápido (90 BPM)</option>
+                <option value="120">Muy rápido (120 BPM)</option>
             </select>
         </div>
 
@@ -159,118 +158,316 @@
 
     <div class="canvas-container">
         <canvas id="canvas" width="500" height="500"></canvas>
-        <canvas id="audioCanvas" width="500" height="500" style="display:none;"></canvas>
         <div id="scanLine"></div>
     </div>
 
     <script>
+        // ------------------------------------------------------------
+        // CONSTANTES
+        // ------------------------------------------------------------
+        const W = 500;          // ancho/alto interno del lienzo
+        const H = 500;
+        const STEPS = 16;       // la pantalla = 1 compás de 16 pasos (semicorcheas)
+        const NOTES = 11;       // cantidad de notas (franjas horizontales)
+        const LOOKAHEAD = 0.15; // cuántos segundos hacia adelante se programan las percusiones
+
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
-        const audioCanvas = document.getElementById('audioCanvas');
-        const audioCtx2D = audioCanvas.getContext('2d');
         const scanLine = document.getElementById('scanLine');
+        const sizeRange = document.getElementById('sizeRange');
+        const tempoSelect = document.getElementById('tempoSelect');
+        const scaleSelect = document.getElementById('scaleSelect');
+        const playBtn = document.getElementById('playBtn');
 
-        let isDrawing = false;
-        let currentColor = '#ff4757';
-        let currentTimbre = 'sine';
-        let activeTool = null; 
-        let isPlaying = false;
-        let showGrid = false;
-        let scanX = 0;
-        
-        let audioCtx = null;
-        let masterGain = null;
-        let compressorNode = null;
-        let limiterNode = null;
-        
-        let continuousTones = {}; 
-        let drumCooldown = { kick: 0, hihat: 0, snare: 0 };
-        let history = [];
-
-        const STEPS = 16; 
-
-        function saveState() {
-            history.push({
-                main: ctx.getImageData(0, 0, canvas.width, canvas.height),
-                audio: audioCtx2D.getImageData(0, 0, audioCanvas.width, audioCanvas.height)
-            });
-            if (history.length > 25) history.shift();
-        }
-
-        const colorAudioMap = {
-            '#ff4757': { type: 'sine',     audioRed: 10, volume: 0.20 },
-            '#2ed573': { type: 'triangle', audioRed: 20, volume: 0.22 },
-            '#1e90ff': { type: 'sawtooth', audioRed: 30, volume: 0.08 },
-            '#ffa502': { type: 'square',   audioRed: 40, volume: 0.07 },
-            '#9b59b6': { type: 'sine',     audioRed: 50, volume: 0.15 }
+        const COLOR_TIMBRE = {
+            '#ff4757': 'sine',
+            '#2ed573': 'triangle',
+            '#1e90ff': 'sawtooth',
+            '#ffa502': 'square',
+            '#9b59b6': 'subsine'
         };
+        const TIMBRES = ['sine', 'triangle', 'sawtooth', 'square', 'subsine'];
+        const BASE_VOL = { sine: 0.20, triangle: 0.20, sawtooth: 0.08, square: 0.07, subsine: 0.20 };
+        const DRUM_COLOR = { kick: '#ff4757', hihat: '#2ed573', snare: '#1e90ff' };
+        const DRUM_TYPES = ['kick', 'hihat', 'snare'];
 
         const scales = {
             menor: [110.00, 130.81, 146.83, 164.81, 196.00, 220.00, 261.63, 293.66, 329.63, 392.00, 440.00],
             mayor: [130.81, 164.81, 196.00, 220.00, 246.94, 261.63, 329.63, 392.00, 440.00, 493.88, 523.25]
         };
 
-        function renderScene() {
+        // ------------------------------------------------------------
+        // ESTADO DE LA OBRA (todo lo dibujado se guarda como datos)
+        // ------------------------------------------------------------
+        let strokes = [];   // líneas de melodía: { color, size, pts: [{x, y}, ...] }
+        let drums = [];     // percusiones: { type, step, y, size }
+        let undoStack = [];
+        let preActionState = null;
+
+        let currentColor = '#ff4757';
+        let activeTool = null;
+        let showGrid = false;
+
+        let drawing = false;
+        let currentStroke = null;
+        let lastPt = null;
+
+        // ------------------------------------------------------------
+        // DESHACER
+        // ------------------------------------------------------------
+        function snapshot() { return JSON.stringify({ strokes: strokes, drums: drums }); }
+
+        function restoreState(str) {
+            const s = JSON.parse(str);
+            strokes = s.strokes;
+            drums = s.drums;
+            columnsDirty = true;
+            render();
+        }
+
+        function beginAction() { preActionState = snapshot(); }
+
+        function endAction() {
+            if (preActionState !== null && preActionState !== snapshot()) {
+                undoStack.push(preActionState);
+                if (undoStack.length > 50) undoStack.shift();
+            }
+            preActionState = null;
+        }
+
+        // ------------------------------------------------------------
+        // DIBUJO EN PANTALLA
+        // ------------------------------------------------------------
+        function drumX(d) { return (d.step + 0.5) * (W / STEPS); }
+        function drumRadius(size) { return Math.min(Math.max(size * 1.5, 12), 30); }
+        function drumIntensity(size) { return Math.min(size / 8, 1.8); }
+
+        function drawGrid() {
+            ctx.save();
+            ctx.strokeStyle = '#2d2d3a';
+            ctx.setLineDash([3, 3]);
+            for (let i = 1; i < STEPS; i++) {
+                const x = (W / STEPS) * i;
+                ctx.lineWidth = (i % 4 === 0) ? 2 : 1;   // línea más gruesa en cada tiempo del compás
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, H);
+                ctx.stroke();
+            }
+            ctx.lineWidth = 1;
+            for (let i = 1; i < NOTES; i++) {
+                const y = (H / NOTES) * i;
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(W, y);
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+
+        function drawStrokes() {
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            for (const s of strokes) {
+                ctx.strokeStyle = s.color;
+                ctx.fillStyle = s.color;
+                ctx.lineWidth = s.size;
+                if (s.pts.length === 1) {
+                    ctx.beginPath();
+                    ctx.arc(s.pts[0].x, s.pts[0].y, s.size / 2, 0, Math.PI * 2);
+                    ctx.fill();
+                } else {
+                    ctx.beginPath();
+                    ctx.moveTo(s.pts[0].x, s.pts[0].y);
+                    for (let i = 1; i < s.pts.length; i++) ctx.lineTo(s.pts[i].x, s.pts[i].y);
+                    ctx.stroke();
+                }
+            }
+        }
+
+        function drawDrums() {
+            for (const d of drums) {
+                const x = drumX(d);
+                const y = d.y;
+                const r = drumRadius(d.size);
+                ctx.fillStyle = DRUM_COLOR[d.type];
+                ctx.beginPath();
+                if (d.type === 'kick') {
+                    ctx.arc(x, y, r, 0, Math.PI * 2);
+                } else if (d.type === 'hihat') {
+                    ctx.moveTo(x, y - r);
+                    ctx.lineTo(x - r, y + r);
+                    ctx.lineTo(x + r, y + r);
+                    ctx.closePath();
+                } else {
+                    ctx.rect(x - r, y - r, r * 2, r * 2);
+                }
+                ctx.fill();
+            }
+        }
+
+        function render() {
             ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillRect(0, 0, W, H);
+            if (showGrid) drawGrid();
+            drawStrokes();
+            drawDrums();
+        }
 
-            if (history.length > 0) {
-                const currentState = history[history.length - 1];
-                const tempCanvas = document.createElement('canvas');
-                tempCanvas.width = canvas.width;
-                tempCanvas.height = canvas.height;
-                const tempCtx = tempCanvas.getContext('2d');
-                tempCtx.putImageData(currentState.main, 0, 0);
-                ctx.drawImage(tempCanvas, 0, 0);
+        // ------------------------------------------------------------
+        // TABLA DE LECTURA DE LA MELODÍA (qué notas suenan en cada columna)
+        // ------------------------------------------------------------
+        let columns = new Array(W).fill(null);
+        let columnsDirty = true;
+
+        function noteIndexForY(y) {
+            const idx = Math.floor(((H - y) / H) * NOTES);
+            return Math.max(0, Math.min(NOTES - 1, idx));
+        }
+
+        function rebuildColumns() {
+            columns = new Array(W).fill(null);
+            for (const s of strokes) {
+                const timbre = COLOR_TIMBRE[s.color];
+                const r = s.size / 2;
+                const intensity = Math.min(s.size / 8, 1.8);
+                for (const p of s.pts) {
+                    const x0 = Math.max(0, Math.floor(p.x - r));
+                    const x1 = Math.min(W - 1, Math.floor(p.x + r));
+                    for (let x = x0; x <= x1; x++) {
+                        const dx = (x + 0.5) - p.x;
+                        const h2 = r * r - dx * dx;
+                        if (h2 < 0) continue;
+                        const h = Math.sqrt(h2);
+                        const lo = noteIndexForY(p.y + h);
+                        const hi = noteIndexForY(p.y - h);
+                        if (!columns[x]) columns[x] = {};
+                        if (!columns[x][timbre]) columns[x][timbre] = new Map();
+                        const m = columns[x][timbre];
+                        for (let n = lo; n <= hi; n++) {
+                            if (!m.has(n) || m.get(n) < intensity) m.set(n, intensity);
+                        }
+                    }
+                }
             }
+            columnsDirty = false;
+        }
 
-            if (showGrid) {
-                ctx.save();
-                ctx.strokeStyle = '#2d2d3a'; 
-                ctx.lineWidth = 1;
-                ctx.setLineDash([3, 3]);
+        // ------------------------------------------------------------
+        // INTERACCIÓN (mouse, touch y lápiz con el mismo código)
+        // ------------------------------------------------------------
+        function getPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = (e.clientX - rect.left) * (W / rect.width);
+            const y = (e.clientY - rect.top) * (H / rect.height);
+            return { x: Math.max(0, Math.min(W, x)), y: Math.max(0, Math.min(H, y)) };
+        }
 
-                for (let i = 1; i < STEPS; i++) {
-                    const x = (canvas.width / STEPS) * i;
-                    ctx.beginPath();
-                    ctx.moveTo(x, 0);
-                    ctx.lineTo(x, canvas.height);
-                    ctx.stroke();
-                }
-
-                const notesCount = 11;
-                for (let i = 1; i < notesCount; i++) {
-                    const y = (canvas.height / notesCount) * i;
-                    ctx.beginPath();
-                    ctx.moveTo(0, y);
-                    ctx.lineTo(canvas.width, y);
-                    ctx.stroke();
-                }
-                ctx.restore();
+        function walkLine(a, b, stepPx, fn) {
+            const d = Math.hypot(b.x - a.x, b.y - a.y);
+            if (d < 0.5) return;
+            const n = Math.max(1, Math.ceil(d / stepPx));
+            for (let i = 1; i <= n; i++) {
+                fn({ x: a.x + (b.x - a.x) * i / n, y: a.y + (b.y - a.y) * i / n });
             }
         }
 
-        // Cuantización métrica exacta basada en las dimensiones reales del canvas interno (500x500)
-        function quantizeXForDrums(x) {
-            const stepWidth = canvas.width / STEPS;
-            const stepIndex = Math.floor(x / stepWidth);
-            const clampedIndex = Math.max(0, Math.min(stepIndex, STEPS - 1));
-            // Retorna exactamente el centro de la celda de la grilla
-            return (clampedIndex * stepWidth) + (stepWidth / 2);
+        function isDrumTool() { return DRUM_TYPES.indexOf(activeTool) !== -1; }
+
+        function toggleDrum(p, size) {
+            const step = Math.max(0, Math.min(STEPS - 1, Math.floor(p.x / (W / STEPS))));
+            const i = drums.findIndex(d => d.type === activeTool && d.step === step);
+            if (i >= 0) {
+                drums.splice(i, 1);
+            } else {
+                drums.push({ type: activeTool, step: step, y: p.y, size: size });
+                if (audioCtx && !playing) playDrum(activeTool, drumIntensity(size), audioCtx.currentTime);
+            }
+            render();
         }
 
-        renderScene();
-        audioCtx2D.clearRect(0, 0, audioCanvas.width, audioCanvas.height);
-        saveState();
+        function eraseAt(p) {
+            const size = parseInt(sizeRange.value);
+            const r = Math.max(size * 1.5, 10);
+            const out = [];
+            for (const s of strokes) {
+                let cur = [];
+                for (const pt of s.pts) {
+                    if (Math.hypot(pt.x - p.x, pt.y - p.y) <= r + s.size / 2) {
+                        if (cur.length) { out.push({ color: s.color, size: s.size, pts: cur }); cur = []; }
+                    } else {
+                        cur.push(pt);
+                    }
+                }
+                if (cur.length) out.push({ color: s.color, size: s.size, pts: cur });
+            }
+            strokes = out;
+            drums = drums.filter(d => Math.hypot(drumX(d) - p.x, d.y - p.y) > r + drumRadius(d.size) * 0.7);
+            columnsDirty = true;
+        }
 
+        canvas.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            ensureAudio();
+            canvas.setPointerCapture(e.pointerId);
+            const p = getPos(e);
+            const size = parseInt(sizeRange.value);
+            beginAction();
+
+            if (isDrumTool()) {
+                toggleDrum(p, size);
+                columnsDirty = true;
+                endAction();
+                return;
+            }
+
+            drawing = true;
+            lastPt = p;
+
+            if (activeTool === 'goma') {
+                eraseAt(p);
+            } else {
+                currentStroke = { color: currentColor, size: size, pts: [p] };
+                strokes.push(currentStroke);
+                columnsDirty = true;
+            }
+            render();
+        });
+
+        canvas.addEventListener('pointermove', (e) => {
+            if (!drawing) return;
+            e.preventDefault();
+            const p = getPos(e);
+            if (activeTool === 'goma') {
+                walkLine(lastPt, p, 4, eraseAt);
+            } else if (currentStroke) {
+                walkLine(lastPt, p, 3, (q) => currentStroke.pts.push(q));
+                columnsDirty = true;
+            }
+            lastPt = p;
+            render();
+        });
+
+        function finishPointer() {
+            if (!drawing) return;
+            drawing = false;
+            currentStroke = null;
+            endAction();
+        }
+        canvas.addEventListener('pointerup', finishPointer);
+        canvas.addEventListener('pointercancel', finishPointer);
+        canvas.addEventListener('lostpointercapture', finishPointer);
+
+        // ------------------------------------------------------------
+        // BOTONES
+        // ------------------------------------------------------------
         document.querySelectorAll('.color-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
                 document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
-                e.target.classList.add('active');
-                currentColor = e.target.dataset.color;
-                currentTimbre = e.target.dataset.timbre;
-                activeTool = null; 
+                e.currentTarget.classList.add('active');
+                currentColor = e.currentTarget.dataset.color;
+                activeTool = null;
             });
         });
 
@@ -278,447 +475,327 @@
             btn.addEventListener('click', (e) => {
                 document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
                 document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
-                const targetBtn = e.target.closest('button');
-                targetBtn.classList.add('active');
-                activeTool = targetBtn.dataset.tool;
+                e.currentTarget.classList.add('active');
+                activeTool = e.currentTarget.dataset.tool;
             });
         });
 
         document.getElementById('gridBtn').addEventListener('click', (e) => {
             showGrid = !showGrid;
-            e.target.classList.toggle('active', showGrid);
-            e.target.textContent = showGrid ? 'Grilla: ON' : 'Grilla: OFF';
-            renderScene();
+            e.currentTarget.classList.toggle('active', showGrid);
+            e.currentTarget.textContent = showGrid ? 'Grilla: ON' : 'Grilla: OFF';
+            render();
         });
-
-        function getPos(e) {
-            const rect = canvas.getBoundingClientRect();
-            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-            // Mapeo proporcional exacto a los 500x500 del canvas interno
-            const scaleX = canvas.width / rect.width;
-            const scaleY = canvas.height / rect.height;
-            return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
-        }
-
-        let lastX = 0, lastY = 0;
-
-        function startDown(e) {
-            e.preventDefault();
-            const pos = getPos(e);
-            
-            const isPercussion = activeTool && ['kick', 'hihat', 'snare'].includes(activeTool);
-            const targetX = isPercussion ? quantizeXForDrums(pos.x) : pos.x;
-
-            saveState();
-            isDrawing = true;
-            lastX = targetX; 
-            lastY = pos.y;
-            
-            if (isPercussion) {
-                toggleOrDrawPercussion(targetX, pos.y);
-                renderScene();
-            } else if (activeTool === 'goma') {
-                eraseAt(pos.x, pos.y);
-                renderScene();
-            }
-        }
-
-        function draw(e) {
-            if (!isDrawing) return;
-            e.preventDefault();
-            const pos = getPos(e);
-            
-            if (activeTool && activeTool !== 'goma') return;
-
-            const size = parseInt(document.getElementById('sizeRange').value);
-
-            if (activeTool === 'goma') {
-                eraseAt(pos.x, pos.y);
-                lastX = pos.x; lastY = pos.y;
-                renderScene();
-                return;
-            }
-
-            const audioProp = colorAudioMap[currentColor];
-            const audioColorStr = `rgb(${audioProp.audioRed}, ${size}, 0)`;
-
-            ctx.lineWidth = size; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-            ctx.strokeStyle = currentColor; ctx.fillStyle = currentColor;
-            
-            audioCtx2D.globalAlpha = 1.0;
-            audioCtx2D.lineWidth = size; audioCtx2D.lineCap = 'round'; audioCtx2D.lineJoin = 'round';
-            audioCtx2D.strokeStyle = audioColorStr; audioCtx2D.fillStyle = audioColorStr;
-
-            drawLine(ctx, lastX, lastY, pos.x, pos.y);
-            drawLine(audioCtx2D, lastX, lastY, pos.x, pos.y);
-
-            lastX = pos.x; lastY = pos.y;
-            renderScene();
-        }
-
-        function eraseAt(x, y) {
-            const size = parseInt(document.getElementById('sizeRange').value);
-            ctx.save(); audioCtx2D.save();
-            ctx.beginPath(); audioCtx2D.beginPath();
-            ctx.arc(x, y, size * 1.5, 0, Math.PI * 2);
-            ctx.fillStyle = '#ffffff'; ctx.fill();
-            audioCtx2D.clearRect(x - size*1.5, y - size*1.5, size*3, size*3);
-            ctx.restore(); audioCtx2D.restore();
-            
-            updateHistoryState();
-        }
-
-        function toggleOrDrawPercussion(x, y) {
-            let audioRedVal = 60;
-            if (activeTool === 'hihat') audioRedVal = 70;
-            if (activeTool === 'snare') audioRedVal = 80;
-
-            const existingData = audioCtx2D.getImageData(Math.floor(x), Math.floor(y), 1, 1).data;
-            const existingAlpha = existingData[3];
-            const existingRed = existingData[0];
-
-            if (existingAlpha > 15 && Math.round(existingRed / 10) * 10 === audioRedVal) {
-                audioCtx2D.clearRect(x - 15, y - 15, 30, 30);
-                
-                ctx.save();
-                ctx.beginPath();
-                ctx.arc(x, y, 22, 0, Math.PI * 2);
-                ctx.fillStyle = '#ffffff';
-                ctx.fill();
-                ctx.restore();
-            } else {
-                const rawSize = parseInt(document.getElementById('sizeRange').value);
-                const size = Math.max(rawSize * 1.5, 12);
-                const audioColorStr = `rgb(${audioRedVal}, ${rawSize}, 0)`;
-
-                ctx.save(); audioCtx2D.save();
-                
-                if (activeTool === 'kick') {
-                    ctx.fillStyle = '#ff4757'; ctx.beginPath(); ctx.arc(x, y, size, 0, Math.PI * 2); ctx.fill();
-                } else if (activeTool === 'hihat') {
-                    ctx.fillStyle = '#2ed573'; ctx.beginPath();
-                    ctx.moveTo(x, y - size); ctx.lineTo(x - size, y + size); ctx.lineTo(x + size, y + size); ctx.closePath(); ctx.fill();
-                } else if (activeTool === 'snare') {
-                    ctx.fillStyle = '#1e90ff'; ctx.fillRect(x - size, y - size, size * 2, size * 2);
-                }
-
-                audioCtx2D.fillStyle = audioColorStr;
-                audioCtx2D.fillRect(x - 1, y - 1, 2, 2);
-                
-                ctx.restore(); audioCtx2D.restore();
-            }
-
-            updateHistoryState();
-        }
-
-        function drawLine(context, x1, y1, x2, y2) {
-            context.beginPath(); context.moveTo(x1, y1); context.lineTo(x2, y2); context.stroke();
-            if (context === ctx) {
-                updateHistoryState();
-            }
-        }
-
-        function updateHistoryState() {
-            if (history.length > 0) {
-                history[history.length - 1].main = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                history[history.length - 1].audio = audioCtx2D.getImageData(0, 0, audioCanvas.width, audioCanvas.height);
-            }
-        }
-
-        function stopDraw() { isDrawing = false; }
-
-        canvas.addEventListener('mousedown', startDown);
-        canvas.addEventListener('mousemove', draw);
-        window.addEventListener('mouseup', stopDraw);
-        canvas.addEventListener('touchstart', startDown, { passive: false });
-        canvas.addEventListener('touchmove', draw, { passive: false });
-        canvas.addEventListener('touchend', stopDraw);
 
         document.getElementById('undoBtn').addEventListener('click', () => {
-            if (history.length > 1) {
-                history.pop();
-                renderScene();
-                const prevState = history[history.length - 1];
-                audioCtx2D.putImageData(prevState.audio, 0, 0);
-            }
+            if (undoStack.length > 0) restoreState(undoStack.pop());
         });
 
-        // Botón limpiar todo completamente corregido: borra historial, lienzos y actualiza
         document.getElementById('clearBtn').addEventListener('click', () => {
-            saveState();
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            audioCtx2D.clearRect(0, 0, audioCanvas.width, audioCanvas.height);
-            history = []; // Vaciamos historial para asegurar borrado total limpio
-            saveState();
-            renderScene();
+            beginAction();
+            strokes = [];
+            drums = [];
+            columnsDirty = true;
+            endAction();
+            render();
         });
 
-        function stopAllActiveTones() {
-            for (const timbre in continuousTones) {
-                for (const tone of continuousTones[timbre]) {
-                    stopContinuousTone(tone);
-                }
-            }
-            continuousTones = {};
-            drumCooldown = { kick: 0, hihat: 0, snare: 0 };
-        }
+        // ------------------------------------------------------------
+        // AUDIO
+        // ------------------------------------------------------------
+        let audioCtx = null;
+        let masterGain = null;
+        let noiseBuf = null;
 
-        const playBtn = document.getElementById('playBtn');
-        playBtn.addEventListener('click', () => {
+        function ensureAudio() {
             if (!audioCtx) {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                
-                compressorNode = audioCtx.createDynamicsCompressor();
-                compressorNode.threshold.setValueAtTime(-18, audioCtx.currentTime);
-                compressorNode.knee.setValueAtTime(20, audioCtx.currentTime);
-                compressorNode.ratio.setValueAtTime(8, audioCtx.currentTime);
-                compressorNode.attack.setValueAtTime(0.005, audioCtx.currentTime);
-                compressorNode.release.setValueAtTime(0.1, audioCtx.currentTime);
 
-                limiterNode = audioCtx.createDynamicsCompressor();
-                limiterNode.threshold.setValueAtTime(-2, audioCtx.currentTime);
-                limiterNode.knee.setValueAtTime(0, audioCtx.currentTime);
-                limiterNode.ratio.setValueAtTime(20, audioCtx.currentTime);
-                limiterNode.attack.setValueAtTime(0.001, audioCtx.currentTime);
-                limiterNode.release.setValueAtTime(0.05, audioCtx.currentTime);
+                const compressor = audioCtx.createDynamicsCompressor();
+                compressor.threshold.setValueAtTime(-18, audioCtx.currentTime);
+                compressor.knee.setValueAtTime(20, audioCtx.currentTime);
+                compressor.ratio.setValueAtTime(8, audioCtx.currentTime);
+                compressor.attack.setValueAtTime(0.005, audioCtx.currentTime);
+                compressor.release.setValueAtTime(0.1, audioCtx.currentTime);
+
+                const limiter = audioCtx.createDynamicsCompressor();
+                limiter.threshold.setValueAtTime(-2, audioCtx.currentTime);
+                limiter.knee.setValueAtTime(0, audioCtx.currentTime);
+                limiter.ratio.setValueAtTime(20, audioCtx.currentTime);
+                limiter.attack.setValueAtTime(0.001, audioCtx.currentTime);
+                limiter.release.setValueAtTime(0.05, audioCtx.currentTime);
 
                 masterGain = audioCtx.createGain();
-                masterGain.gain.value = 2.0; 
+                masterGain.gain.value = 2.0;
+                masterGain.connect(compressor);
+                compressor.connect(limiter);
+                limiter.connect(audioCtx.destination);
 
-                masterGain.connect(compressorNode);
-                compressorNode.connect(limiterNode);
-                limiterNode.connect(audioCtx.destination);
+                // ruido blanco de 1 segundo, se reutiliza para hi-hat y snare
+                noiseBuf = audioCtx.createBuffer(1, audioCtx.sampleRate, audioCtx.sampleRate);
+                const out = noiseBuf.getChannelData(0);
+                for (let i = 0; i < out.length; i++) out[i] = Math.random() * 2 - 1;
             }
-
             if (audioCtx.state === 'suspended') audioCtx.resume();
-            
-            isPlaying = !isPlaying;
-            playBtn.classList.toggle('active', isPlaying);
-            playBtn.textContent = isPlaying ? '⏸ Pausa' : '▶ Play';
-            scanLine.style.display = isPlaying ? 'block' : 'none';
-
-            if (!isPlaying) {
-                stopAllActiveTones();
-            }
-        });
-
-        function animate() {
-            requestAnimationFrame(animate);
-            if (!isPlaying) return;
-
-            for (const k in drumCooldown) {
-                if (drumCooldown[k] > 0) drumCooldown[k]--;
-            }
-
-            const speed = parseFloat(document.getElementById('tempoSelect').value);
-            scanX += speed;
-            if (scanX > canvas.width) scanX = 0;
-
-            const percent = (scanX / canvas.width) * 100;
-            scanLine.style.left = percent + '%';
-
-            checkColumnAndPlay(scanX);
         }
 
-        function checkColumnAndPlay(x) {
-            const colIndex = Math.floor(x);
-            if (colIndex >= audioCanvas.width) return;
-
-            const imgData = audioCtx2D.getImageData(colIndex, 0, 1, audioCanvas.height);
-            const data = imgData.data;
-            
-            const scaleType = document.getElementById('scaleSelect').value;
-            const currentScale = scales[scaleType];
-            
-            const continuousTargets = { sine: new Map(), triangle: new Map(), sawtooth: new Map(), square: new Map(), subsine: new Map() };
-            let drumsInColumn = { kick: 0, hihat: 0, snare: 0 };
-
-            for (let y = 0; y < audioCanvas.height; y += 8) {
-                const r = data[(y * 4)];
-                const g = data[(y * 4) + 1]; 
-                const alpha = data[(y * 4) + 3];
-
-                if (alpha > 15) {
-                    const rSnap = Math.round(r / 10) * 10; 
-
-                    if (rSnap >= 10 && rSnap <= 50) {
-                        let timbre = 'sine';
-                        if (rSnap === 20) timbre = 'triangle';
-                        else if (rSnap === 30) timbre = 'sawtooth';
-                        else if (rSnap === 40) timbre = 'square';
-                        else if (rSnap === 50) timbre = 'subsine';
-
-                        const noteIndex = Math.floor(((audioCanvas.height - y) / audioCanvas.height) * currentScale.length);
-                        const drawnSize = g > 0 ? g : 4; 
-                        const intensity = Math.min(drawnSize / 8, 1.8);
-
-                        if (!continuousTargets[timbre].has(noteIndex)) {
-                            continuousTargets[timbre].set(noteIndex, intensity);
-                        } else {
-                            continuousTargets[timbre].set(noteIndex, Math.max(continuousTargets[timbre].get(noteIndex), intensity));
-                        }
-                    } else if (rSnap >= 60 && rSnap <= 80) {
-                        let drum = 'kick';
-                        if (rSnap === 70) drum = 'hihat';
-                        else if (rSnap === 80) drum = 'snare';
-                        const drawnSize = g > 0 ? g : 4; 
-                        drumsInColumn[drum] = Math.max(drumsInColumn[drum], Math.min(drawnSize / 8, 1.8));
-                    }
-                }
-            }
-
-            const now = audioCtx.currentTime;
-
-            for (const timbre in continuousTargets) {
-                let targets = Array.from(continuousTargets[timbre].entries()).map(([noteIdx, intensity]) => {
-                    let freq = currentScale[Math.min(noteIdx, currentScale.length - 1)];
-                    if (timbre === 'subsine') freq = freq * 0.5;
-                    return { freq, intensity };
-                });
-                targets.sort((a, b) => a.freq - b.freq);
-
-                if (!continuousTones[timbre]) continuousTones[timbre] = [];
-                let active = continuousTones[timbre];
-                active.sort((a, b) => a.freq - b.freq);
-
-                let nextActive = [];
-                let maxLen = Math.max(targets.length, active.length);
-
-                for (let i = 0; i < maxLen; i++) {
-                    if (i < targets.length && i < active.length) {
-                        let oscObj = active[i];
-                        let target = targets[i];
-                        
-                        oscObj.missingFrames = 0; 
-                        oscObj.osc.frequency.setTargetAtTime(target.freq, now, 0.05);
-                        
-                        const baseVol = (timbre === 'sawtooth') ? 0.08 : (timbre === 'square' ? 0.07 : 0.20);
-                        const vol = baseVol * target.intensity;
-                        oscObj.gainNode.gain.setTargetAtTime(vol, now, 0.03);
-                        oscObj.freq = target.freq;
-                        nextActive.push(oscObj);
-                    } else if (i < targets.length) {
-                        let target = targets[i];
-                        let oscObj = startContinuousTone(target.freq, target.intensity, timbre);
-                        oscObj.freq = target.freq;
-                        oscObj.missingFrames = 0;
-                        nextActive.push(oscObj);
-                    } else if (i < active.length) {
-                        let oscObj = active[i];
-                        oscObj.missingFrames = (oscObj.missingFrames || 0) + 1;
-                        if (oscObj.missingFrames > 15) { 
-                            stopContinuousTone(oscObj);
-                        } else {
-                            nextActive.push(oscObj); 
-                        }
-                    }
-                }
-                continuousTones[timbre] = nextActive;
-            }
-
-            for (const drum of ['kick', 'hihat', 'snare']) {
-                if (drumsInColumn[drum] > 0) {
-                    if (drumCooldown[drum] === 0) {
-                        playPercussion(drum, drumsInColumn[drum]);
-                        drumCooldown[drum] = 35; 
-                    }
-                }
-            }
-        }
-
-        function startContinuousTone(freq, intensity, timbre) {
-            const osc = audioCtx.createOscillator();
-            const gainNode = audioCtx.createGain();
-            osc.type = (timbre === 'subsine') ? 'sine' : timbre;
-            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-            
-            const baseVol = (timbre === 'sawtooth') ? 0.08 : (timbre === 'square' ? 0.07 : 0.20);
-            const baseGain = baseVol * intensity; 
-            
-            gainNode.gain.setValueAtTime(0.0001, audioCtx.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(baseGain, audioCtx.currentTime + 0.05);
-            osc.connect(gainNode);
-            gainNode.connect(masterGain); 
-            osc.start();
-            return { osc, gainNode, freq, missingFrames: 0 };
-        }
-
-        function stopContinuousTone(toneObj) {
+        // ---- Percusión (cada golpe se programa en un instante exacto "when") ----
+        function playDrum(type, intensity, when) {
             if (!audioCtx) return;
-            const now = audioCtx.currentTime;
+            const vol = Math.min(intensity, 1.5);
             try {
-                toneObj.gainNode.gain.cancelScheduledValues(now);
-                toneObj.gainNode.gain.setValueAtTime(Math.max(toneObj.gainNode.gain.value, 0.0001), now);
-                toneObj.gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.1);
-                toneObj.osc.stop(now + 0.15);
-            } catch (e) {}
-        }
-
-        function playPercussion(type, intensity = 1.0) {
-            if (!audioCtx) return;
-            try {
-                const now = audioCtx.currentTime;
-                const volMultiplier = Math.min(intensity, 1.5);
-
                 if (type === 'kick') {
                     const osc = audioCtx.createOscillator();
                     const gain = audioCtx.createGain();
                     osc.type = 'sine';
-                    osc.frequency.setValueAtTime(130, now);
-                    osc.frequency.exponentialRampToValueAtTime(45, now + 0.06); 
-                    
-                    gain.gain.setValueAtTime(1.8 * volMultiplier, now); 
-                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
-                    
-                    osc.connect(gain); gain.connect(masterGain);
-                    osc.start(now); osc.stop(now + 0.3);
+                    osc.frequency.setValueAtTime(130, when);
+                    osc.frequency.exponentialRampToValueAtTime(45, when + 0.06);
+                    gain.gain.setValueAtTime(1.8 * vol, when);
+                    gain.gain.exponentialRampToValueAtTime(0.001, when + 0.25);
+                    osc.connect(gain);
+                    gain.connect(masterGain);
+                    osc.start(when);
+                    osc.stop(when + 0.3);
 
                 } else if (type === 'hihat') {
-                    const bufferSize = audioCtx.sampleRate * 0.04;
-                    const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-                    const output = buffer.getChannelData(0);
-                    for (let i = 0; i < bufferSize; i++) output[i] = Math.random() * 2 - 1;
                     const noise = audioCtx.createBufferSource();
-                    noise.buffer = buffer;
+                    noise.buffer = noiseBuf;
                     const filter = audioCtx.createBiquadFilter();
-                    filter.type = 'highpass'; filter.frequency.value = 7000;
+                    filter.type = 'highpass';
+                    filter.frequency.value = 7000;
                     const gain = audioCtx.createGain();
-                    gain.gain.setValueAtTime(0.7 * volMultiplier, now);
-                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
-                    noise.connect(filter); filter.connect(gain); gain.connect(masterGain);
-                    noise.start(now);
+                    gain.gain.setValueAtTime(0.7 * vol, when);
+                    gain.gain.exponentialRampToValueAtTime(0.001, when + 0.05);
+                    noise.connect(filter);
+                    filter.connect(gain);
+                    gain.connect(masterGain);
+                    noise.start(when, Math.random() * 0.5, 0.06);
 
                 } else if (type === 'snare') {
                     const osc = audioCtx.createOscillator();
                     const oscGain = audioCtx.createGain();
                     osc.type = 'triangle';
-                    osc.frequency.setValueAtTime(220, now);
-                    osc.frequency.exponentialRampToValueAtTime(100, now + 0.08);
-                    oscGain.gain.setValueAtTime(0.6 * volMultiplier, now);
-                    oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
-                    osc.connect(oscGain); oscGain.connect(masterGain);
-                    osc.start(now); osc.stop(now + 0.18);
+                    osc.frequency.setValueAtTime(220, when);
+                    osc.frequency.exponentialRampToValueAtTime(100, when + 0.08);
+                    oscGain.gain.setValueAtTime(0.6 * vol, when);
+                    oscGain.gain.exponentialRampToValueAtTime(0.001, when + 0.15);
+                    osc.connect(oscGain);
+                    oscGain.connect(masterGain);
+                    osc.start(when);
+                    osc.stop(when + 0.18);
 
-                    const bufferSize = audioCtx.sampleRate * 0.15;
-                    const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-                    const output = buffer.getChannelData(0);
-                    for (let i = 0; i < bufferSize; i++) output[i] = Math.random() * 2 - 1;
                     const noise = audioCtx.createBufferSource();
-                    noise.buffer = buffer;
+                    noise.buffer = noiseBuf;
                     const filter = audioCtx.createBiquadFilter();
-                    filter.type = 'bandpass'; filter.frequency.value = 2000;
+                    filter.type = 'bandpass';
+                    filter.frequency.value = 2000;
                     const noiseGain = audioCtx.createGain();
-                    noiseGain.gain.setValueAtTime(0.7 * volMultiplier, now);
-                    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
-                    noise.connect(filter); filter.connect(noiseGain); noiseGain.connect(masterGain);
-                    noise.start(now);
+                    noiseGain.gain.setValueAtTime(0.7 * vol, when);
+                    noiseGain.gain.exponentialRampToValueAtTime(0.001, when + 0.15);
+                    noise.connect(filter);
+                    filter.connect(noiseGain);
+                    noiseGain.connect(masterGain);
+                    noise.start(when, Math.random() * 0.5, 0.15);
                 }
-            } catch (e) {}
+            } catch (err) { /* ignorar errores de audio puntuales */ }
         }
 
-        animate();
+        // ---- Melodía (tonos continuos que acompañan a la línea de lectura) ----
+        const voices = { sine: [], triangle: [], sawtooth: [], square: [], subsine: [] };
+
+        function startTone(freq, intensity, timbre) {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = (timbre === 'subsine') ? 'sine' : timbre;
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(BASE_VOL[timbre] * intensity, audioCtx.currentTime + 0.05);
+            osc.connect(gain);
+            gain.connect(masterGain);
+            osc.start();
+            return { osc: osc, gain: gain, freq: freq, lastSeen: audioCtx.currentTime };
+        }
+
+        function stopTone(v) {
+            if (!audioCtx) return;
+            const now = audioCtx.currentTime;
+            try {
+                v.gain.gain.cancelScheduledValues(now);
+                v.gain.gain.setValueAtTime(Math.max(v.gain.gain.value, 0.0001), now);
+                v.gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.1);
+                v.osc.stop(now + 0.15);
+            } catch (err) { /* ignorar */ }
+        }
+
+        function stopAllTones() {
+            for (const t of TIMBRES) {
+                for (const v of voices[t]) stopTone(v);
+                voices[t] = [];
+            }
+        }
+
+        // ------------------------------------------------------------
+        // REPRODUCCIÓN: el reloj del audio manda, así el tempo es constante
+        // ------------------------------------------------------------
+        let playing = false;
+        let phase = 0;          // posición en el compás (0 a 1), se guarda al pausar
+        let t0 = 0;             // instante (reloj de audio) en que arrancó el compás
+        let currentDur = 8;     // duración de un compás en segundos
+        let nextStep = 0;       // próximo paso de percusión a programar
+        let schedTimer = null;
+        let lastCol = null;
+
+        function loopDuration() {
+            const bpm = parseFloat(tempoSelect.value);
+            return (60 / bpm) * 4;    // 4 tiempos por compás
+        }
+
+        // Las percusiones suenan cuando la línea de lectura pasa por el centro
+        // de su casilla, que es donde se dibujan.
+        function scheduleStep(stepIndex, time) {
+            const hits = { kick: 0, hihat: 0, snare: 0 };
+            for (const d of drums) {
+                if (d.step === stepIndex) hits[d.type] = Math.max(hits[d.type], drumIntensity(d.size));
+            }
+            for (const type of DRUM_TYPES) {
+                if (hits[type] > 0) playDrum(type, hits[type], time);
+            }
+        }
+
+        function scheduler() {
+            if (!playing) return;
+            const now = audioCtx.currentTime;
+            const stepDur = currentDur / STEPS;
+            while (true) {
+                const time = t0 + (nextStep + 0.5) * stepDur;
+                if (time > now + LOOKAHEAD) break;
+                if (time >= now - 0.03) scheduleStep(nextStep % STEPS, time);
+                nextStep++;
+            }
+        }
+
+        function startTransport() {
+            playing = true;
+            currentDur = loopDuration();
+            t0 = audioCtx.currentTime - phase * currentDur;
+            nextStep = Math.max(0, Math.ceil(phase * STEPS - 0.5));
+            lastCol = null;
+            schedTimer = setInterval(scheduler, 25);
+            scheduler();
+            scanLine.style.display = 'block';
+        }
+
+        function stopTransport() {
+            const stepsDone = (audioCtx.currentTime - t0) / (currentDur / STEPS);
+            phase = (((stepsDone % STEPS) + STEPS) % STEPS) / STEPS;
+            playing = false;
+            clearInterval(schedTimer);
+            stopAllTones();
+            scanLine.style.display = 'none';
+        }
+
+        playBtn.addEventListener('click', () => {
+            ensureAudio();
+            if (!playing) startTransport(); else stopTransport();
+            playBtn.classList.toggle('active', playing);
+            playBtn.textContent = playing ? '⏸ Pausa' : '▶ Play';
+        });
+
+        // Cambiar el tempo en pleno juego mantiene la posición actual
+        tempoSelect.addEventListener('change', () => {
+            if (!playing) return;
+            const now = audioCtx.currentTime;
+            const stepsDone = (now - t0) / (currentDur / STEPS);
+            currentDur = loopDuration();
+            t0 = now - stepsDone * (currentDur / STEPS);
+        });
+
+        function collectColumns(from, to, merged) {
+            for (let x = from; x <= to; x++) {
+                const col = columns[x];
+                if (!col) continue;
+                for (const timbre in col) {
+                    if (!merged[timbre]) merged[timbre] = new Map();
+                    for (const [idx, inten] of col[timbre]) {
+                        if (!merged[timbre].has(idx) || merged[timbre].get(idx) < inten) merged[timbre].set(idx, inten);
+                    }
+                }
+            }
+        }
+
+        function updateMelody(x) {
+            if (columnsDirty) rebuildColumns();
+
+            const cur = Math.min(W - 1, Math.floor(x));
+            let from = (lastCol === null) ? cur : lastCol;
+            const span = (cur >= from) ? (cur - from) : (cur + W - from);
+            if (span > 60) from = cur;      // si la pestaña se trabó, no juntar demasiadas columnas
+
+            // se revisan todas las columnas que la línea recorrió desde el cuadro anterior
+            // así los puntos finos no se "saltean" aunque el tempo sea rápido
+            const merged = {};
+            if (cur >= from) {
+                collectColumns(from, cur, merged);
+            } else {
+                collectColumns(from, W - 1, merged);
+                collectColumns(0, cur, merged);
+            }
+            lastCol = cur;
+
+            const scale = scales[scaleSelect.value];
+            const nowT = audioCtx.currentTime;
+
+            for (const timbre of TIMBRES) {
+                const targets = [];
+                const m = merged[timbre];
+                if (m) {
+                    for (const [idx, inten] of m) {
+                        let freq = scale[Math.min(idx, scale.length - 1)];
+                        if (timbre === 'subsine') freq = freq * 0.5;
+                        targets.push({ freq: freq, intensity: inten });
+                    }
+                }
+                targets.sort((a, b) => a.freq - b.freq);
+
+                const active = voices[timbre];
+                active.sort((a, b) => a.freq - b.freq);
+
+                const next = [];
+                const maxLen = Math.max(targets.length, active.length);
+                for (let i = 0; i < maxLen; i++) {
+                    if (i < targets.length && i < active.length) {
+                        const v = active[i];
+                        const t = targets[i];
+                        v.lastSeen = nowT;
+                        v.freq = t.freq;
+                        v.osc.frequency.setTargetAtTime(t.freq, nowT, 0.05);
+                        v.gain.gain.setTargetAtTime(BASE_VOL[timbre] * t.intensity, nowT, 0.03);
+                        next.push(v);
+                    } else if (i < targets.length) {
+                        next.push(startTone(targets[i].freq, targets[i].intensity, timbre));
+                    } else {
+                        const v = active[i];
+                        if (nowT - v.lastSeen > 0.25) stopTone(v); else next.push(v);
+                    }
+                }
+                voices[timbre] = next;
+            }
+        }
+
+        function frame() {
+            requestAnimationFrame(frame);
+            if (!playing) return;
+            const stepsDone = (audioCtx.currentTime - t0) / (currentDur / STEPS);
+            const ph = (((stepsDone % STEPS) + STEPS) % STEPS) / STEPS;
+            scanLine.style.left = (ph * 100) + '%';
+            updateMelody(ph * W);
+        }
+
+        // ------------------------------------------------------------
+        // ARRANQUE
+        // ------------------------------------------------------------
+        render();
+        frame();
     </script>
 </body>
 </html>
