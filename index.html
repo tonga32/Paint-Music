@@ -3,163 +3,349 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Paint Musical - TR-909 PRO</title>
+    <title>Paint Musical · TR-909 PRO</title>
     <style>
+        * { box-sizing: border-box; }
+        :root {
+            --bg: #0a0b14;
+            --panel: rgba(255, 255, 255, 0.045);
+            --border: rgba(255, 255, 255, 0.09);
+            --text: #eceef9;
+            --muted: #8d92ad;
+            --accent: #7c5cff;
+            --accent2: #22d3ee;
+            --surface: #1a1c30;
+        }
+        html, body { margin: 0; }
         body {
-            margin: 0;
-            padding: 10px;
-            background: #121218;
-            color: #fff;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+            min-height: 100vh;
+            padding: 14px;
+            color: var(--text);
+            font-family: Inter, 'Segoe UI', system-ui, -apple-system, Roboto, 'Helvetica Neue', sans-serif;
+            background:
+                radial-gradient(1100px 560px at 8% -10%, rgba(124, 92, 255, 0.20), transparent 60%),
+                radial-gradient(900px 500px at 100% 0%, rgba(34, 211, 238, 0.13), transparent 55%),
+                var(--bg);
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
         }
-        h1 { margin: 5px 0; font-size: 1.3rem; text-align: center; }
-        p { margin: 0 0 8px 0; color: #a0a0c0; font-size: 0.8rem; text-align: center; }
+        .app { max-width: 1200px; margin: 0 auto; }
 
-        #controls {
-            display: flex;
-            gap: 6px;
-            margin-bottom: 8px;
-            background: #1e1e2f;
-            padding: 8px;
+        /* ---------- encabezado ---------- */
+        .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+        .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+        .logo {
+            position: relative; flex: none; width: 40px; height: 40px; border-radius: 12px;
+            background: conic-gradient(from 210deg, #ff4757, #ffa502, #2ed573, #1e90ff, #9b59b6, #ff4757);
+            box-shadow: 0 0 22px rgba(124, 92, 255, 0.45);
+        }
+        .logo::after { content: ""; position: absolute; inset: 9px; border-radius: 7px; background: var(--bg); }
+        h1 {
+            margin: 0; font-size: 1.35rem; font-weight: 700; letter-spacing: -0.01em;
+            background: linear-gradient(90deg, #ffffff, #b9a8ff 60%, #7ee7f5);
+            -webkit-background-clip: text; background-clip: text; color: transparent;
+        }
+        .brand p { margin: 2px 0 0; color: var(--muted); font-size: 0.78rem; }
+        .badge {
+            flex: none; font-size: 0.68rem; letter-spacing: 0.14em; font-weight: 700; white-space: nowrap;
+            padding: 5px 10px; border-radius: 999px;
+            border: 1px solid rgba(124, 92, 255, 0.5); color: #c9bcff; background: rgba(124, 92, 255, 0.12);
+        }
+
+        /* ---------- estructura ---------- */
+        .layout { display: grid; grid-template-columns: 1fr; gap: 14px; }
+        .sidebar { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+        .stage { display: flex; justify-content: center; align-items: flex-start; min-width: 0; }
+        @media (max-width: 979px) { .stage { order: -1; } }
+        @media (min-width: 980px) {
+            .layout { grid-template-columns: 340px 1fr; align-items: start; }
+            .sidebar { position: sticky; top: 14px; }
+        }
+
+        .group {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 11px 12px 12px;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+        .cap {
+            display: block; margin-bottom: 9px;
+            font-size: 0.64rem; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted);
+        }
+
+        /* ---------- botones, selects, sliders ---------- */
+        button, select {
+            font: inherit; font-size: 0.82rem; color: var(--text);
+            background: var(--surface);
+            border: 1px solid var(--border);
             border-radius: 10px;
-            align-items: center;
-            flex-wrap: wrap;
-            justify-content: center;
-            max-width: 580px;
-        }
-        .control-group {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            font-size: 0.75rem;
-        }
-        button, select, input {
-            padding: 5px 7px;
-            border: none;
-            border-radius: 5px;
-            background: #4e4efc;
-            color: white;
-            font-weight: bold;
+            padding: 8px 11px;
             cursor: pointer;
-            transition: background 0.2s;
-            font-size: 0.8rem;
+            transition: background 0.15s, border-color 0.15s, transform 0.1s, box-shadow 0.15s;
+            user-select: none;
         }
-        button:hover, select:hover { background: #3b3bfc; }
-        button.active { background: #ff7675; }
-
-        .color-btn {
-            width: 26px;
-            height: 26px;
-            border-radius: 50%;
-            border: 2px solid #fff;
-            padding: 0;
-            cursor: pointer;
-            transition: transform 0.1s, box-shadow 0.1s;
-        }
-        .color-btn.active {
-            transform: scale(1.2);
-            box-shadow: 0 0 8px #fff;
-            border: 2px solid #ffeaa7;
-        }
+        button:hover, select:hover { background: #24273f; border-color: rgba(255, 255, 255, 0.2); }
+        button:active { transform: scale(0.97); }
+        button.active { background: rgba(124, 92, 255, 0.24); border-color: var(--accent); color: #fff; }
+        select option { background: #1a1c30; color: #fff; }
+        button:disabled { opacity: 0.6; cursor: wait; }
 
         input[type="range"] {
-            width: 65px;
+            -webkit-appearance: none; appearance: none;
+            width: 100%; height: 4px; padding: 0; border: none; border-radius: 4px;
+            background: rgba(255, 255, 255, 0.16); outline: none; cursor: pointer;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%;
+            background: #fff; box-shadow: 0 0 0 3px var(--accent), 0 2px 8px rgba(0, 0, 0, 0.5);
+        }
+        input[type="range"]::-moz-range-thumb {
+            width: 18px; height: 18px; border: none; border-radius: 50%;
+            background: #fff; box-shadow: 0 0 0 3px var(--accent), 0 2px 8px rgba(0, 0, 0, 0.5);
         }
 
+        /* transporte */
+        .transport { display: flex; flex-direction: column; gap: 10px; }
+        #playBtn {
+            width: 100%; padding: 13px; font-size: 1rem; font-weight: 700; letter-spacing: 0.02em;
+            color: #fff; border: none;
+            background: linear-gradient(135deg, #7c5cff, #22d3ee);
+            box-shadow: 0 8px 24px rgba(124, 92, 255, 0.35);
+        }
+        #playBtn:hover { filter: brightness(1.1); background: linear-gradient(135deg, #7c5cff, #22d3ee); }
+        #playBtn.active { background: linear-gradient(135deg, #ff5f7e, #ff9a5c); box-shadow: 0 8px 24px rgba(255, 95, 126, 0.35); }
+        .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .field {
+            display: flex; flex-direction: column; gap: 5px; min-width: 0;
+            font-size: 0.64rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted);
+        }
+        .field select { width: 100%; font-weight: 400; letter-spacing: 0; text-transform: none; }
+
+        /* colores */
+        .colors { display: flex; gap: 12px; flex-wrap: wrap; padding: 2px 4px 4px; }
+        .color-btn {
+            width: 32px; height: 32px; padding: 0; border-radius: 50%;
+            background: var(--c); border: 2px solid rgba(255, 255, 255, 0.25);
+        }
+        .color-btn:hover { background: var(--c); transform: scale(1.1); }
+        .color-btn.active {
+            background: var(--c); border-color: transparent; transform: scale(1.12);
+            box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px #fff, 0 0 18px var(--c);
+        }
+
+        /* herramientas de percusión */
+        .tools { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+        .tool-btn {
+            display: flex; flex-direction: column; align-items: center; gap: 5px;
+            padding: 9px 4px; font-size: 0.72rem;
+        }
+        .tool-btn svg { width: 20px; height: 20px; display: block; }
+        .tool-btn .emoji { font-size: 1.05rem; line-height: 20px; }
+
+        /* grosor */
+        .sizerow { display: flex; align-items: center; gap: 12px; }
+        .sizeprev {
+            flex: none; width: 36px; height: 36px; display: grid; place-items: center;
+            border-radius: 10px; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--border);
+        }
+        #sizeDot { display: block; border-radius: 50%; background: #ff4757; box-shadow: 0 0 10px currentColor; }
+
+        .btnrow { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+        #clearBtn:hover { background: rgba(214, 48, 49, 0.3); border-color: #d63031; }
+
+        /* panel de mezcla */
+        .panel {
+            display: none; flex-direction: column; gap: 9px;
+            background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 12px;
+        }
+        .panel.open { display: flex; }
+        .panel h3 { margin: 4px 0 0; font-size: 0.64rem; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+        .panel h3:first-child { margin-top: 0; }
+        .panel .row { display: flex; align-items: center; gap: 10px; font-size: 0.8rem; }
+        .panel .row label { width: 70px; flex: none; color: #c4c8de; }
+        .panel .row.wide label { width: auto; flex: 1; }
+        .panel .row input[type="range"] { flex: 1; }
+
+        /* ---------- lienzo ---------- */
         .canvas-container {
             position: relative;
             width: 100%;
-            max-width: 420px;
+            max-width: 820px;
             aspect-ratio: 1 / 1;
-            box-shadow: 0 8px 20px rgba(0,0,0,0.5);
-            border-radius: 10px;
+            border-radius: 20px;
             overflow: hidden;
-            border: 3px solid #3a3a5c;
-            background: #ffffff;
+            background: #0e0f1c;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(124, 92, 255, 0.12), 0 0 80px rgba(124, 92, 255, 0.10);
         }
-
-        canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            cursor: crosshair;
-            touch-action: none;
+        .canvas-container { width: min(100%, 820px, max(320px, calc(100dvh - 120px))); }
+        .canvas-container.light { background: #f7f7fb; border-color: rgba(0, 0, 0, 0.1); }
+        .canvas-container canvas {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            cursor: crosshair; touch-action: none;
         }
-
+        #overlay { pointer-events: none; }
         #scanLine {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 2px;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.4);
-            pointer-events: none;
-            display: none;
+            position: absolute; top: 0; left: 0; width: 2px; height: 100%;
+            margin-left: -1px;
+            background: linear-gradient(to bottom, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.95) 20%, rgba(255, 255, 255, 0.95) 80%, rgba(255, 255, 255, 0));
+            box-shadow: 0 0 14px 2px rgba(124, 92, 255, 0.75);
+            pointer-events: none; display: none; z-index: 2;
+        }
+        .canvas-container.light #scanLine {
+            background: linear-gradient(to bottom, rgba(20, 20, 40, 0), rgba(20, 20, 40, 0.8) 20%, rgba(20, 20, 40, 0.8) 80%, rgba(20, 20, 40, 0));
+            box-shadow: 0 0 10px rgba(124, 92, 255, 0.5);
+        }
+        #overlay { z-index: 3; }
+
+        @media (max-width: 600px) {
+            body { padding: 8px; }
+            .brand p { display: none; }
+            h1 { font-size: 1.15rem; }
+        }
+        @media (pointer: coarse) {
+            button, select { padding: 11px 12px; }
+            .color-btn { width: 38px; height: 38px; padding: 0; }
+            .tool-btn { padding: 11px 4px; }
         }
     </style>
 </head>
 <body>
-
-    <h1>Paint Musical & TR-909 PRO</h1>
-    <p>Dibujá para hacer música: horizontal = tiempo, vertical = altura de la nota.</p>
-
-    <div id="controls">
-        <div class="control-group" title="Timbres de Melodía">
-            <button class="color-btn active" data-color="#ff4757" style="background: #ff4757;" title="Rojo: Senoidal"></button>
-            <button class="color-btn" data-color="#2ed573" style="background: #2ed573;" title="Verde: Triangular"></button>
-            <button class="color-btn" data-color="#1e90ff" style="background: #1e90ff;" title="Azul: Sierra"></button>
-            <button class="color-btn" data-color="#ffa502" style="background: #ffa502;" title="Amarillo: Cuadrada"></button>
-            <button class="color-btn" data-color="#9b59b6" style="background: #9b59b6;" title="Violeta: Sub-bass"></button>
+<div class="app">
+    <header class="top">
+        <div class="brand">
+            <div class="logo"></div>
+            <div>
+                <h1>Paint Musical</h1>
+                <p>Dibujá para hacer música: horizontal = tiempo, vertical = altura de la nota.</p>
+            </div>
         </div>
+        <span class="badge">TR-909 PRO</span>
+    </header>
 
-        <div class="control-group">
-            <button class="tool-btn" data-tool="kick" title="Kick 909">⭕ Kick</button>
-            <button class="tool-btn" data-tool="hihat" title="Hi-Hat 909">🔺 Hat</button>
-            <button class="tool-btn" data-tool="snare" title="Snare 909">⬜ Snare</button>
-            <button class="tool-btn" data-tool="goma" title="Borrar">🧹</button>
-        </div>
+    <main class="layout">
+        <aside class="sidebar" id="controls">
 
-        <div class="control-group">
-            <label>Grosor:</label>
-            <input type="range" id="sizeRange" min="1" max="25" value="4">
-        </div>
+            <div class="group transport">
+                <button id="playBtn">▶ Play</button>
+                <div class="fields">
+                    <label class="field">Tempo
+                        <select id="tempoSelect">
+                            <option value="20">Muy lento (20 BPM)</option>
+                            <option value="30" selected>Lento (30 BPM)</option>
+                            <option value="60">Normal (60 BPM)</option>
+                            <option value="90">Rápido (90 BPM)</option>
+                            <option value="120">Muy rápido (120 BPM)</option>
+                        </select>
+                    </label>
+                    <label class="field">Escala
+                        <select id="scaleSelect">
+                            <option value="menor">Menor (oscura)</option>
+                            <option value="mayor">Mayor (brillante)</option>
+                        </select>
+                    </label>
+                </div>
+            </div>
 
-        <div class="control-group">
-            <label>Tempo:</label>
-            <select id="tempoSelect">
-                <option value="20">Muy lento (20 BPM)</option>
-                <option value="30" selected>Lento (30 BPM)</option>
-                <option value="60">Normal (60 BPM)</option>
-                <option value="90">Rápido (90 BPM)</option>
-                <option value="120">Muy rápido (120 BPM)</option>
-            </select>
-        </div>
+            <div class="group">
+                <span class="cap">Melodía · cada color es un timbre</span>
+                <div class="colors">
+                    <button class="color-btn active" data-color="#ff4757" style="--c:#ff4757" title="Rojo: Suave (senoidal con armónicos)"></button>
+                    <button class="color-btn" data-color="#2ed573" style="--c:#2ed573" title="Verde: Flauta (triangular con vibrato)"></button>
+                    <button class="color-btn" data-color="#1e90ff" style="--c:#1e90ff" title="Azul: Sierra gruesa (3 voces desafinadas + filtro)"></button>
+                    <button class="color-btn" data-color="#ffa502" style="--c:#ffa502" title="Amarillo: Cuadrada con filtro (tipo chiptune cálido)"></button>
+                    <button class="color-btn" data-color="#9b59b6" style="--c:#9b59b6" title="Violeta: Sub-bass"></button>
+                </div>
+            </div>
 
-        <div class="control-group">
-            <label>Escala:</label>
-            <select id="scaleSelect">
-                <option value="menor">Menor (Grave/Oscura)</option>
-                <option value="mayor">Mayor (Brillante)</option>
-            </select>
-        </div>
+            <div class="group">
+                <span class="cap">Percusión · tocá el lienzo</span>
+                <div class="tools">
+                    <button class="tool-btn" data-tool="kick" title="Kick 909">
+                        <svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="7.5" fill="#ff4757"/></svg><span>Kick</span>
+                    </button>
+                    <button class="tool-btn" data-tool="snare" title="Snare 909">
+                        <svg viewBox="0 0 20 20"><rect x="3" y="3" width="14" height="14" rx="1.5" fill="#1e90ff"/></svg><span>Snare</span>
+                    </button>
+                    <button class="tool-btn" data-tool="hihat" title="Hi-Hat cerrado">
+                        <svg viewBox="0 0 20 20"><path d="M10 2.5 L18 17 H2 Z" fill="#2ed573" stroke="#2ed573" stroke-width="1" stroke-linejoin="round"/></svg><span>Hat</span>
+                    </button>
+                    <button class="tool-btn" data-tool="openhat" title="Hi-Hat abierto (el Hat cerrado lo corta)">
+                        <svg viewBox="0 0 20 20"><path d="M10 3 L17.5 16.5 H2.5 Z" fill="none" stroke="#00b5ad" stroke-width="2.2" stroke-linejoin="round"/></svg><span>Open</span>
+                    </button>
+                    <button class="tool-btn" data-tool="tom" title="Tom: más arriba = más agudo, más abajo = más grave">
+                        <svg viewBox="0 0 20 20"><path d="M10 1.5 L18.5 10 L10 18.5 L1.5 10 Z" fill="#fd79a8" stroke="#fd79a8" stroke-width="1" stroke-linejoin="round"/></svg><span>Tom</span>
+                    </button>
+                    <button class="tool-btn" data-tool="goma" title="Borrar">
+                        <span class="emoji">🧹</span><span>Borrar</span>
+                    </button>
+                </div>
+            </div>
 
-        <div class="control-group">
-            <button id="gridBtn">Grilla: OFF</button>
-            <button id="playBtn" style="background: #00b894;">▶ Play</button>
-            <button id="undoBtn" style="background: #e17055;">↶</button>
-            <button id="clearBtn" style="background: #d63031;">🗑</button>
-        </div>
-    </div>
+            <div class="group">
+                <span class="cap">Grosor · intensidad</span>
+                <div class="sizerow">
+                    <div class="sizeprev"><span id="sizeDot"></span></div>
+                    <input type="range" id="sizeRange" min="1" max="25" value="4">
+                </div>
+            </div>
 
-    <div class="canvas-container">
-        <canvas id="canvas" width="500" height="500"></canvas>
-        <div id="scanLine"></div>
-    </div>
+            <div class="group">
+                <span class="cap">Lienzo</span>
+                <div class="btnrow">
+                    <button id="gridBtn">Grilla: OFF</button>
+                    <button id="themeBtn" title="Cambiar el fondo entre oscuro y claro">🌓 Fondo</button>
+                    <button id="undoBtn" title="Deshacer">↶ Deshacer</button>
+                    <button id="clearBtn" title="Borrar todo">🗑 Limpiar</button>
+                </div>
+            </div>
+
+            <div class="group">
+                <span class="cap">Proyecto</span>
+                <div class="btnrow">
+                    <button id="saveBtn" title="Guardar la obra en un archivo">💾 Guardar</button>
+                    <button id="openBtn" title="Abrir una obra guardada">📂 Abrir</button>
+                    <button id="wavBtn" title="Exportar el audio a un archivo WAV">⬇ WAV</button>
+                    <button id="mixBtn" title="Mezcla, efectos y exportación">🎚 Mezcla</button>
+                </div>
+                <input type="file" id="fileInput" accept=".json,application/json" style="display:none">
+            </div>
+
+            <div id="mixPanel" class="panel">
+                <h3>Volumen de cada instrumento</h3>
+                <div class="row"><label>Kick</label><input type="range" class="mix" data-ch="kick" min="0" max="150" value="100"></div>
+                <div class="row"><label>Snare</label><input type="range" class="mix" data-ch="snare" min="0" max="150" value="100"></div>
+                <div class="row"><label>Hats</label><input type="range" class="mix" data-ch="hat" min="0" max="150" value="100"></div>
+                <div class="row"><label>Toms</label><input type="range" class="mix" data-ch="tom" min="0" max="150" value="100"></div>
+                <div class="row"><label>Melodía</label><input type="range" class="mix" data-ch="melody" min="0" max="150" value="100"></div>
+                <h3>Efectos</h3>
+                <div class="row"><label>Reverb</label><input type="range" id="reverbRange" min="0" max="100" value="25"></div>
+                <div class="row"><label>Eco</label><input type="range" id="delayRange" min="0" max="100" value="15"></div>
+                <h3>Exportar audio (WAV)</h3>
+                <div class="row wide">
+                    <label>Cantidad de compases</label>
+                    <select id="exportBars">
+                        <option value="1">1 compás</option>
+                        <option value="2" selected>2 compases</option>
+                        <option value="4">4 compases</option>
+                        <option value="8">8 compases</option>
+                    </select>
+                </div>
+            </div>
+
+        </aside>
+
+        <section class="stage">
+            <div class="canvas-container">
+                <canvas id="canvas" width="500" height="500"></canvas>
+                <canvas id="overlay" width="500" height="500"></canvas>
+                <div id="scanLine"></div>
+            </div>
+        </section>
+    </main>
+</div>
 
     <script>
         // ------------------------------------------------------------
@@ -187,9 +373,10 @@
             '#9b59b6': 'subsine'
         };
         const TIMBRES = ['sine', 'triangle', 'sawtooth', 'square', 'subsine'];
-        const BASE_VOL = { sine: 0.20, triangle: 0.20, sawtooth: 0.08, square: 0.07, subsine: 0.20 };
-        const DRUM_COLOR = { kick: '#ff4757', hihat: '#2ed573', snare: '#1e90ff' };
-        const DRUM_TYPES = ['kick', 'hihat', 'snare'];
+        const BASE_VOL = { sine: 0.22, triangle: 0.22, sawtooth: 0.13, square: 0.11, subsine: 0.24 };
+        const DRUM_COLOR = { kick: '#ff4757', hihat: '#2ed573', snare: '#1e90ff', openhat: '#00b5ad', tom: '#fd79a8' };
+        // el orden importa: el hat cerrado se programa antes que el abierto para poder cortarlo
+        const DRUM_TYPES = ['kick', 'snare', 'tom', 'hihat', 'openhat'];
 
         const scales = {
             menor: [110.00, 130.81, 146.83, 164.81, 196.00, 220.00, 261.63, 293.66, 329.63, 392.00, 440.00],
@@ -207,6 +394,7 @@
         let currentColor = '#ff4757';
         let activeTool = null;
         let showGrid = false;
+        let canvasLight = false;   // fondo del lienzo: false = oscuro, true = claro
 
         let drawing = false;
         let currentStroke = null;
@@ -223,6 +411,7 @@
             drums = s.drums;
             columnsDirty = true;
             render();
+            autosave();
         }
 
         function beginAction() { preActionState = snapshot(); }
@@ -233,6 +422,7 @@
                 if (undoStack.length > 50) undoStack.shift();
             }
             preActionState = null;
+            autosave();
         }
 
         // ------------------------------------------------------------
@@ -244,7 +434,7 @@
 
         function drawGrid() {
             ctx.save();
-            ctx.strokeStyle = '#2d2d3a';
+            ctx.strokeStyle = canvasLight ? '#d6d6e4' : 'rgba(255,255,255,0.09)';
             ctx.setLineDash([3, 3]);
             for (let i = 1; i < STEPS; i++) {
                 const x = (W / STEPS) * i;
@@ -268,10 +458,15 @@
         function drawStrokes() {
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
+            let total = 0;
+            for (const s of strokes) total += s.pts.length;
+            const glow = !canvasLight && total < 5000;      // el brillo se apaga si hay muchísimo dibujo (para que no se trabe)
+            const k = canvas.width / W;
             for (const s of strokes) {
                 ctx.strokeStyle = s.color;
                 ctx.fillStyle = s.color;
                 ctx.lineWidth = s.size;
+                if (glow) { ctx.shadowColor = s.color; ctx.shadowBlur = 9 * k; }
                 if (s.pts.length === 1) {
                     ctx.beginPath();
                     ctx.arc(s.pts[0].x, s.pts[0].y, s.size / 2, 0, Math.PI * 2);
@@ -283,31 +478,56 @@
                     ctx.stroke();
                 }
             }
+            ctx.shadowBlur = 0;
         }
 
         function drawDrums() {
+            const k = canvas.width / W;
             for (const d of drums) {
                 const x = drumX(d);
                 const y = d.y;
                 const r = drumRadius(d.size);
                 ctx.fillStyle = DRUM_COLOR[d.type];
+                ctx.strokeStyle = DRUM_COLOR[d.type];
+                ctx.lineJoin = 'round';
+                if (!canvasLight) { ctx.shadowColor = DRUM_COLOR[d.type]; ctx.shadowBlur = 10 * k; }
                 ctx.beginPath();
                 if (d.type === 'kick') {
                     ctx.arc(x, y, r, 0, Math.PI * 2);
+                    ctx.fill();
                 } else if (d.type === 'hihat') {
                     ctx.moveTo(x, y - r);
                     ctx.lineTo(x - r, y + r);
                     ctx.lineTo(x + r, y + r);
                     ctx.closePath();
+                    ctx.fill();
+                } else if (d.type === 'openhat') {
+                    // triángulo hueco = hat abierto
+                    ctx.moveTo(x, y - r);
+                    ctx.lineTo(x - r, y + r);
+                    ctx.lineTo(x + r, y + r);
+                    ctx.closePath();
+                    ctx.lineWidth = 4;
+                    ctx.stroke();
+                } else if (d.type === 'tom') {
+                    // rombo = tom
+                    ctx.moveTo(x, y - r * 1.2);
+                    ctx.lineTo(x + r * 1.2, y);
+                    ctx.lineTo(x, y + r * 1.2);
+                    ctx.lineTo(x - r * 1.2, y);
+                    ctx.closePath();
+                    ctx.fill();
                 } else {
                     ctx.rect(x - r, y - r, r * 2, r * 2);
+                    ctx.fill();
                 }
-                ctx.fill();
             }
+            ctx.shadowBlur = 0;
         }
 
         function render() {
-            ctx.fillStyle = '#ffffff';
+            ctx.setTransform(canvas.width / W, 0, 0, canvas.height / H, 0, 0);
+            ctx.fillStyle = canvasLight ? '#f7f7fb' : '#0e0f1c';
             ctx.fillRect(0, 0, W, H);
             if (showGrid) drawGrid();
             drawStrokes();
@@ -323,6 +543,33 @@
         function noteIndexForY(y) {
             const idx = Math.floor(((H - y) / H) * NOTES);
             return Math.max(0, Math.min(NOTES - 1, idx));
+        }
+
+        // Para cada columna de píxeles, guarda en qué alturas hay dibujo (centro del trazo).
+        // Sirve para marcar con puntos dónde la línea de lectura toca el dibujo.
+        let crossCols = new Array(W).fill(null);
+
+        function buildCrossings() {
+            crossCols = new Array(W).fill(null);
+            const add = (x, y, s) => {
+                const xi = Math.max(0, Math.min(W - 1, Math.round(x)));
+                let list = crossCols[xi];
+                if (!list) list = crossCols[xi] = [];
+                for (const c of list) {
+                    if (c.color === s.color && Math.abs(c.y - y) < 6) return;
+                }
+                list.push({ y: y, color: s.color, size: s.size });
+            };
+            for (const s of strokes) {
+                const pts = s.pts;
+                if (pts.length === 1) { add(pts[0].x, pts[0].y, s); continue; }
+                for (let i = 1; i < pts.length; i++) {
+                    const a = pts[i - 1], b = pts[i];
+                    const dx = b.x - a.x, dy = b.y - a.y;
+                    const n = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy))));
+                    for (let k = 0; k <= n; k++) add(a.x + dx * k / n, a.y + dy * k / n, s);
+                }
+            }
         }
 
         function rebuildColumns() {
@@ -350,6 +597,7 @@
                     }
                 }
             }
+            buildCrossings();
             columnsDirty = false;
         }
 
@@ -381,7 +629,7 @@
                 drums.splice(i, 1);
             } else {
                 drums.push({ type: activeTool, step: step, y: p.y, size: size });
-                if (audioCtx && !playing) playDrum(activeTool, drumIntensity(size), audioCtx.currentTime);
+                if (audioCtx && !playing) playDrum(activeTool, drumIntensity(size), audioCtx.currentTime, p.y);
             }
             render();
         }
@@ -505,131 +753,392 @@
         // ------------------------------------------------------------
         let audioCtx = null;
         let masterGain = null;
+        let melodyBus = null;
+        let drumBus = null;
+        let chan = {};             // un canal de volumen por instrumento: kick, snare, hat, tom
+        let reverbSendMel = null;
+        let reverbSendDrum = null;
+        let delaySend = null;
         let noiseBuf = null;
+        let satCurve = null;
+        let openHatChoke = null;   // para que el hat cerrado corte al abierto
+        let offlineMode = false;   // true solo mientras se exporta el WAV
+
+        const reverbRange = document.getElementById('reverbRange');
+        const delayRange = document.getElementById('delayRange');
+        const mixInputs = {};
+        document.querySelectorAll('.mix').forEach(el => { mixInputs[el.dataset.ch] = el; });
+
+        function makeImpulse(seconds, decay) {
+            const len = Math.floor(audioCtx.sampleRate * seconds);
+            const buf = audioCtx.createBuffer(2, len, audioCtx.sampleRate);
+            for (let c = 0; c < 2; c++) {
+                const d = buf.getChannelData(c);
+                for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+            }
+            return buf;
+        }
+
+        function setParam(param, value, immediate) {
+            if (immediate) param.value = value;
+            else param.setTargetAtTime(value, audioCtx.currentTime, 0.04);
+        }
+
+        function applyFx(immediate) {
+            if (!audioCtx || !reverbSendMel) return;
+            const rv = parseInt(reverbRange.value) / 100;
+            const dl = parseInt(delayRange.value) / 100;
+            setParam(reverbSendMel.gain, rv * 0.8, immediate);
+            setParam(reverbSendDrum.gain, rv * 0.3, immediate);
+            setParam(delaySend.gain, dl * 0.6, immediate);
+        }
+
+        function applyMixer(immediate) {
+            if (!audioCtx || !melodyBus) return;
+            for (const ch in mixInputs) {
+                const g = (ch === 'melody') ? melodyBus : chan[ch];
+                if (g) setParam(g.gain, parseInt(mixInputs[ch].value) / 100, immediate);
+            }
+        }
+
+        function getMixer() {
+            const m = {};
+            for (const ch in mixInputs) m[ch] = parseInt(mixInputs[ch].value);
+            return m;
+        }
+
+        reverbRange.addEventListener('input', () => { applyFx(); autosave(); });
+        delayRange.addEventListener('input', () => { applyFx(); autosave(); });
+        for (const ch in mixInputs) mixInputs[ch].addEventListener('input', () => { applyMixer(); autosave(); });
+
+        // Arma toda la cadena de audio sobre el contexto actual (audioCtx).
+        // Se usa tanto para reproducir en vivo como para exportar el WAV.
+        function buildGraph(immediate) {
+            const t0 = audioCtx.currentTime;
+            const compressor = audioCtx.createDynamicsCompressor();
+            compressor.threshold.setValueAtTime(-18, t0);
+            compressor.knee.setValueAtTime(20, t0);
+            compressor.ratio.setValueAtTime(8, t0);
+            compressor.attack.setValueAtTime(0.005, t0);
+            compressor.release.setValueAtTime(0.1, t0);
+
+            const limiter = audioCtx.createDynamicsCompressor();
+            limiter.threshold.setValueAtTime(-2, t0);
+            limiter.knee.setValueAtTime(0, t0);
+            limiter.ratio.setValueAtTime(20, t0);
+            limiter.attack.setValueAtTime(0.001, t0);
+            limiter.release.setValueAtTime(0.05, t0);
+
+            masterGain = audioCtx.createGain();
+            masterGain.gain.value = 2.0;
+            masterGain.connect(compressor);
+            compressor.connect(limiter);
+            limiter.connect(audioCtx.destination);
+
+            // buses: la melodía y la percusión pasan por su propio canal
+            melodyBus = audioCtx.createGain();
+            melodyBus.connect(masterGain);
+            drumBus = audioCtx.createGain();
+            drumBus.connect(masterGain);
+            chan = {};
+            for (const name of ['kick', 'snare', 'hat', 'tom']) {
+                chan[name] = audioCtx.createGain();
+                chan[name].connect(drumBus);
+            }
+
+            // reverb (respuesta de sala generada con ruido que se apaga)
+            const reverbIn = audioCtx.createGain();
+            const reverbLP = audioCtx.createBiquadFilter();
+            reverbLP.type = 'lowpass';
+            reverbLP.frequency.value = 4500;
+            const convolver = audioCtx.createConvolver();
+            convolver.buffer = makeImpulse(2.2, 2.5);
+            const reverbOut = audioCtx.createGain();
+            reverbOut.gain.value = 0.9;
+            reverbIn.connect(reverbLP);
+            reverbLP.connect(convolver);
+            convolver.connect(reverbOut);
+            reverbOut.connect(masterGain);
+
+            reverbSendMel = audioCtx.createGain();
+            melodyBus.connect(reverbSendMel);
+            reverbSendMel.connect(reverbIn);
+            reverbSendDrum = audioCtx.createGain();
+            drumBus.connect(reverbSendDrum);
+            reverbSendDrum.connect(reverbIn);
+
+            // eco (solo melodía) con repeticiones que se van oscureciendo
+            const delay = audioCtx.createDelay(1.5);
+            delay.delayTime.value = 0.375;
+            const feedback = audioCtx.createGain();
+            feedback.gain.value = 0.4;
+            const fbLP = audioCtx.createBiquadFilter();
+            fbLP.type = 'lowpass';
+            fbLP.frequency.value = 2200;
+            delaySend = audioCtx.createGain();
+            melodyBus.connect(delaySend);
+            delaySend.connect(delay);
+            delay.connect(fbLP);
+            fbLP.connect(feedback);
+            feedback.connect(delay);
+            fbLP.connect(masterGain);
+
+            // ruido blanco de 1 segundo, se reutiliza para hats, snare y toms
+            noiseBuf = audioCtx.createBuffer(1, audioCtx.sampleRate, audioCtx.sampleRate);
+            const out = noiseBuf.getChannelData(0);
+            for (let i = 0; i < out.length; i++) out[i] = Math.random() * 2 - 1;
+
+            // curva de saturación suave (da cuerpo al kick y a los toms)
+            satCurve = new Float32Array(1024);
+            for (let i = 0; i < 1024; i++) satCurve[i] = Math.tanh(2.5 * (i * 2 / 1023 - 1));
+
+            applyFx(immediate);
+            applyMixer(immediate);
+        }
 
         function ensureAudio() {
             if (!audioCtx) {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-
-                const compressor = audioCtx.createDynamicsCompressor();
-                compressor.threshold.setValueAtTime(-18, audioCtx.currentTime);
-                compressor.knee.setValueAtTime(20, audioCtx.currentTime);
-                compressor.ratio.setValueAtTime(8, audioCtx.currentTime);
-                compressor.attack.setValueAtTime(0.005, audioCtx.currentTime);
-                compressor.release.setValueAtTime(0.1, audioCtx.currentTime);
-
-                const limiter = audioCtx.createDynamicsCompressor();
-                limiter.threshold.setValueAtTime(-2, audioCtx.currentTime);
-                limiter.knee.setValueAtTime(0, audioCtx.currentTime);
-                limiter.ratio.setValueAtTime(20, audioCtx.currentTime);
-                limiter.attack.setValueAtTime(0.001, audioCtx.currentTime);
-                limiter.release.setValueAtTime(0.05, audioCtx.currentTime);
-
-                masterGain = audioCtx.createGain();
-                masterGain.gain.value = 2.0;
-                masterGain.connect(compressor);
-                compressor.connect(limiter);
-                limiter.connect(audioCtx.destination);
-
-                // ruido blanco de 1 segundo, se reutiliza para hi-hat y snare
-                noiseBuf = audioCtx.createBuffer(1, audioCtx.sampleRate, audioCtx.sampleRate);
-                const out = noiseBuf.getChannelData(0);
-                for (let i = 0; i < out.length; i++) out[i] = Math.random() * 2 - 1;
+                buildGraph(true);
             }
             if (audioCtx.state === 'suspended') audioCtx.resume();
         }
 
         // ---- Percusión (cada golpe se programa en un instante exacto "when") ----
-        function playDrum(type, intensity, when) {
+        const HAT_FREQS = [205.3, 304.4, 369.6, 522.7, 540, 800];   // los 6 osciladores metálicos de la 909
+
+        function noiseBurst(when, filterType, freq, q, peak, decay, dest) {
+            const noise = audioCtx.createBufferSource();
+            noise.buffer = noiseBuf;
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = filterType;
+            filter.frequency.value = freq;
+            filter.Q.value = q;
+            const gain = audioCtx.createGain();
+            gain.gain.setValueAtTime(peak, when);
+            gain.gain.exponentialRampToValueAtTime(0.001, when + decay);
+            noise.connect(filter);
+            filter.connect(gain);
+            gain.connect(dest);
+            noise.start(when, Math.random() * 0.5, decay + 0.03);
+        }
+
+        function metalHat(when, vol, decay, open) {
+            const dest = chan.hat;
+            const bp = audioCtx.createBiquadFilter();
+            bp.type = 'bandpass';
+            bp.frequency.value = 10000;
+            bp.Q.value = 0.8;
+            const hp = audioCtx.createBiquadFilter();
+            hp.type = 'highpass';
+            hp.frequency.value = 7000;
+            const env = audioCtx.createGain();
+            const choke = audioCtx.createGain();
+            const peak = (open ? 0.65 : 0.8) * vol;
+            env.gain.setValueAtTime(peak, when);
+            if (open) env.gain.exponentialRampToValueAtTime(peak * 0.35, when + 0.06);
+            env.gain.exponentialRampToValueAtTime(0.001, when + decay);
+            for (const f of HAT_FREQS) {
+                const o = audioCtx.createOscillator();
+                o.type = 'square';
+                o.frequency.value = f;
+                o.connect(bp);
+                o.start(when);
+                o.stop(when + decay + 0.05);
+            }
+            bp.connect(hp);
+            hp.connect(env);
+            env.connect(choke);
+            choke.connect(dest);
+            noiseBurst(when, 'highpass', 8000, 0.7, 0.22 * vol, decay, dest);
+            return choke;
+        }
+
+        function tomFreq(y) {
+            const yy = (typeof y === 'number') ? y : H / 2;
+            return 75 + (1 - Math.max(0, Math.min(H, yy)) / H) * 185;   // arriba = agudo, abajo = grave
+        }
+
+        function playDrum(type, intensity, when, y) {
             if (!audioCtx) return;
             const vol = Math.min(intensity, 1.5);
             try {
                 if (type === 'kick') {
                     const osc = audioCtx.createOscillator();
+                    const shaper = audioCtx.createWaveShaper();
+                    shaper.curve = satCurve;
                     const gain = audioCtx.createGain();
                     osc.type = 'sine';
-                    osc.frequency.setValueAtTime(130, when);
-                    osc.frequency.exponentialRampToValueAtTime(45, when + 0.06);
-                    gain.gain.setValueAtTime(1.8 * vol, when);
-                    gain.gain.exponentialRampToValueAtTime(0.001, when + 0.25);
-                    osc.connect(gain);
-                    gain.connect(masterGain);
+                    osc.frequency.setValueAtTime(165, when);
+                    osc.frequency.exponentialRampToValueAtTime(48, when + 0.07);
+                    gain.gain.setValueAtTime(1.6 * vol, when);
+                    gain.gain.exponentialRampToValueAtTime(0.001, when + 0.34);
+                    osc.connect(shaper);
+                    shaper.connect(gain);
+                    gain.connect(chan.kick);
                     osc.start(when);
-                    osc.stop(when + 0.3);
-
-                } else if (type === 'hihat') {
-                    const noise = audioCtx.createBufferSource();
-                    noise.buffer = noiseBuf;
-                    const filter = audioCtx.createBiquadFilter();
-                    filter.type = 'highpass';
-                    filter.frequency.value = 7000;
-                    const gain = audioCtx.createGain();
-                    gain.gain.setValueAtTime(0.7 * vol, when);
-                    gain.gain.exponentialRampToValueAtTime(0.001, when + 0.05);
-                    noise.connect(filter);
-                    filter.connect(gain);
-                    gain.connect(masterGain);
-                    noise.start(when, Math.random() * 0.5, 0.06);
+                    osc.stop(when + 0.4);
+                    noiseBurst(when, 'bandpass', 2800, 1, 0.35 * vol, 0.012, chan.kick);   // "clic" del ataque
 
                 } else if (type === 'snare') {
-                    const osc = audioCtx.createOscillator();
-                    const oscGain = audioCtx.createGain();
-                    osc.type = 'triangle';
-                    osc.frequency.setValueAtTime(220, when);
-                    osc.frequency.exponentialRampToValueAtTime(100, when + 0.08);
-                    oscGain.gain.setValueAtTime(0.6 * vol, when);
-                    oscGain.gain.exponentialRampToValueAtTime(0.001, when + 0.15);
-                    osc.connect(oscGain);
-                    oscGain.connect(masterGain);
-                    osc.start(when);
-                    osc.stop(when + 0.18);
-
+                    const tones = [[330, 250, 0.35], [200, 160, 0.45]];
+                    for (const t of tones) {
+                        const osc = audioCtx.createOscillator();
+                        const g = audioCtx.createGain();
+                        osc.type = 'triangle';
+                        osc.frequency.setValueAtTime(t[0], when);
+                        osc.frequency.exponentialRampToValueAtTime(t[1], when + 0.06);
+                        g.gain.setValueAtTime(t[2] * vol, when);
+                        g.gain.exponentialRampToValueAtTime(0.001, when + 0.13);
+                        osc.connect(g);
+                        g.connect(chan.snare);
+                        osc.start(when);
+                        osc.stop(when + 0.16);
+                    }
+                    // la "cola" de ruido: golpe fuerte y luego un resto más suave
                     const noise = audioCtx.createBufferSource();
                     noise.buffer = noiseBuf;
-                    const filter = audioCtx.createBiquadFilter();
-                    filter.type = 'bandpass';
-                    filter.frequency.value = 2000;
-                    const noiseGain = audioCtx.createGain();
-                    noiseGain.gain.setValueAtTime(0.7 * vol, when);
-                    noiseGain.gain.exponentialRampToValueAtTime(0.001, when + 0.15);
-                    noise.connect(filter);
-                    filter.connect(noiseGain);
-                    noiseGain.connect(masterGain);
-                    noise.start(when, Math.random() * 0.5, 0.15);
+                    const hp = audioCtx.createBiquadFilter();
+                    hp.type = 'highpass';
+                    hp.frequency.value = 1400;
+                    const ng = audioCtx.createGain();
+                    ng.gain.setValueAtTime(0.85 * vol, when);
+                    ng.gain.exponentialRampToValueAtTime(0.3 * vol, when + 0.04);
+                    ng.gain.exponentialRampToValueAtTime(0.001, when + 0.22);
+                    noise.connect(hp);
+                    hp.connect(ng);
+                    ng.connect(chan.snare);
+                    noise.start(when, Math.random() * 0.5, 0.25);
+
+                } else if (type === 'hihat') {
+                    // el hat cerrado corta al abierto que esté sonando
+                    if (openHatChoke) {
+                        openHatChoke.gain.cancelScheduledValues(when);
+                        openHatChoke.gain.setTargetAtTime(0, when, 0.005);
+                        openHatChoke = null;
+                    }
+                    metalHat(when, vol, 0.06, false);
+
+                } else if (type === 'openhat') {
+                    openHatChoke = metalHat(when, vol, 0.45, true);
+
+                } else if (type === 'tom') {
+                    const f = tomFreq(y);
+                    const len = 0.22 + (1 - (f - 75) / 185) * 0.25;   // los toms graves duran más
+                    const osc = audioCtx.createOscillator();
+                    const shaper = audioCtx.createWaveShaper();
+                    shaper.curve = satCurve;
+                    const gain = audioCtx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(f * 2, when);
+                    osc.frequency.exponentialRampToValueAtTime(f, when + 0.045);
+                    gain.gain.setValueAtTime(1.3 * vol, when);
+                    gain.gain.exponentialRampToValueAtTime(0.001, when + len);
+                    osc.connect(shaper);
+                    shaper.connect(gain);
+                    gain.connect(chan.tom);
+                    osc.start(when);
+                    osc.stop(when + len + 0.05);
+
+                    const osc2 = audioCtx.createOscillator();
+                    const g2 = audioCtx.createGain();
+                    osc2.type = 'triangle';
+                    osc2.frequency.setValueAtTime(f * 1.55, when);
+                    g2.gain.setValueAtTime(0.25 * vol, when);
+                    g2.gain.exponentialRampToValueAtTime(0.001, when + 0.09);
+                    osc2.connect(g2);
+                    g2.connect(chan.tom);
+                    osc2.start(when);
+                    osc2.stop(when + 0.12);
+
+                    noiseBurst(when, 'bandpass', 1800, 1, 0.25 * vol, 0.015, chan.tom);   // golpe de parche
                 }
             } catch (err) { /* ignorar errores de audio puntuales */ }
         }
 
-        // ---- Melodía (tonos continuos que acompañan a la línea de lectura) ----
-        const voices = { sine: [], triangle: [], sawtooth: [], square: [], subsine: [] };
+        // ---- Melodía: cada color es un instrumento armado con varios osciladores ----
+        // t = forma de onda, m = múltiplo de la frecuencia, d = desafinación en cents, g = volumen
+        // cut = el filtro corta en (frecuencia de la nota x cut); vib = profundidad del vibrato en cents
+        const VOICE_DEF = {
+            sine:     { parts: [ {t:'sine', m:1, d:0, g:0.80}, {t:'sine', m:2, d:0, g:0.14}, {t:'sine', m:3, d:0, g:0.06} ], cut: 0, vib: 0 },
+            triangle: { parts: [ {t:'triangle', m:1, d:0, g:0.75}, {t:'sine', m:2, d:0, g:0.25} ], cut: 7, vib: 9 },
+            sawtooth: { parts: [ {t:'sawtooth', m:1, d:-14, g:0.34}, {t:'sawtooth', m:1, d:0, g:0.34}, {t:'sawtooth', m:1, d:14, g:0.34} ], cut: 6, vib: 0 },
+            square:   { parts: [ {t:'square', m:1, d:-7, g:0.5}, {t:'square', m:1, d:7, g:0.5} ], cut: 4, vib: 0 },
+            subsine:  { parts: [ {t:'sine', m:1, d:0, g:0.75}, {t:'triangle', m:1, d:0, g:0.25} ], cut: 3, vib: 0 }
+        };
+        let voices = { sine: [], triangle: [], sawtooth: [], square: [], subsine: [] };
 
-        function startTone(freq, intensity, timbre) {
-            const osc = audioCtx.createOscillator();
+        function cutoffFor(freq, def) { return Math.min(9000, Math.max(300, freq * def.cut)); }
+
+        function startTone(freq, intensity, timbre, when) {
+            const def = VOICE_DEF[timbre];
+            const now = (when !== undefined) ? when : audioCtx.currentTime;
+            const level = BASE_VOL[timbre] * intensity;
             const gain = audioCtx.createGain();
-            osc.type = (timbre === 'subsine') ? 'sine' : timbre;
-            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-            gain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(BASE_VOL[timbre] * intensity, audioCtx.currentTime + 0.05);
-            osc.connect(gain);
-            gain.connect(masterGain);
-            osc.start();
-            return { osc: osc, gain: gain, freq: freq, lastSeen: audioCtx.currentTime };
+            gain.gain.setValueAtTime(0.0001, now);
+            gain.gain.exponentialRampToValueAtTime(level, now + 0.05);
+            gain.connect(melodyBus);
+
+            let entry = gain;
+            let filt = null;
+            if (def.cut) {
+                filt = audioCtx.createBiquadFilter();
+                filt.type = 'lowpass';
+                filt.Q.value = 1.2;
+                filt.frequency.value = cutoffFor(freq, def);
+                filt.connect(gain);
+                entry = filt;
+            }
+
+            let lfo = null, lfoGain = null;
+            if (def.vib) {
+                lfo = audioCtx.createOscillator();
+                lfo.frequency.value = 5.2;
+                lfoGain = audioCtx.createGain();
+                lfoGain.gain.value = def.vib;
+                lfo.connect(lfoGain);
+                lfo.start(now);
+            }
+
+            const oscs = [];
+            for (const p of def.parts) {
+                const o = audioCtx.createOscillator();
+                o.type = p.t;
+                o.frequency.setValueAtTime(freq * p.m, now);
+                o.detune.value = p.d;
+                const pg = audioCtx.createGain();
+                pg.gain.value = p.g;
+                o.connect(pg);
+                pg.connect(entry);
+                if (lfoGain) lfoGain.connect(o.detune);
+                o.start(now);
+                oscs.push({ osc: o, mult: p.m });
+            }
+            return { oscs: oscs, filt: filt, def: def, lfo: lfo, gain: gain, freq: freq, lastSeen: now, level: level };
         }
 
-        function stopTone(v) {
+        function setVoiceFreq(v, freq, now) {
+            for (const o of v.oscs) o.osc.frequency.setTargetAtTime(freq * o.mult, now, 0.05);
+            if (v.filt) v.filt.frequency.setTargetAtTime(cutoffFor(freq, v.def), now, 0.05);
+        }
+
+        function stopTone(v, when) {
             if (!audioCtx) return;
-            const now = audioCtx.currentTime;
+            const now = (when !== undefined) ? when : audioCtx.currentTime;
             try {
+                const cur = offlineMode ? v.level : v.gain.gain.value;
                 v.gain.gain.cancelScheduledValues(now);
-                v.gain.gain.setValueAtTime(Math.max(v.gain.gain.value, 0.0001), now);
-                v.gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.1);
-                v.osc.stop(now + 0.15);
+                v.gain.gain.setValueAtTime(Math.max(cur, 0.0001), now);
+                v.gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+                const end = now + 0.18;
+                for (const o of v.oscs) o.osc.stop(end);
+                if (v.lfo) v.lfo.stop(end);
             } catch (err) { /* ignorar */ }
         }
 
-        function stopAllTones() {
+        function stopAllTones(when) {
             for (const t of TIMBRES) {
-                for (const v of voices[t]) stopTone(v);
+                for (const v of voices[t]) stopTone(v, when);
                 voices[t] = [];
             }
         }
@@ -653,12 +1162,14 @@
         // Las percusiones suenan cuando la línea de lectura pasa por el centro
         // de su casilla, que es donde se dibujan.
         function scheduleStep(stepIndex, time) {
-            const hits = { kick: 0, hihat: 0, snare: 0 };
+            const hits = {};
             for (const d of drums) {
-                if (d.step === stepIndex) hits[d.type] = Math.max(hits[d.type], drumIntensity(d.size));
+                if (d.step !== stepIndex) continue;
+                const inten = drumIntensity(d.size);
+                if (!hits[d.type] || hits[d.type].intensity < inten) hits[d.type] = { intensity: inten, y: d.y };
             }
             for (const type of DRUM_TYPES) {
-                if (hits[type] > 0) playDrum(type, hits[type], time);
+                if (hits[type]) playDrum(type, hits[type].intensity, time, hits[type].y);
             }
         }
 
@@ -692,6 +1203,7 @@
             clearInterval(schedTimer);
             stopAllTones();
             scanLine.style.display = 'none';
+            clearOverlay();
         }
 
         playBtn.addEventListener('click', () => {
@@ -723,7 +1235,7 @@
             }
         }
 
-        function updateMelody(x) {
+        function updateMelody(x, tNow) {
             if (columnsDirty) rebuildColumns();
 
             const cur = Math.min(W - 1, Math.floor(x));
@@ -743,7 +1255,7 @@
             lastCol = cur;
 
             const scale = scales[scaleSelect.value];
-            const nowT = audioCtx.currentTime;
+            const nowT = (tNow !== undefined) ? tNow : audioCtx.currentTime;
 
             for (const timbre of TIMBRES) {
                 const targets = [];
@@ -768,14 +1280,15 @@
                         const t = targets[i];
                         v.lastSeen = nowT;
                         v.freq = t.freq;
-                        v.osc.frequency.setTargetAtTime(t.freq, nowT, 0.05);
+                        setVoiceFreq(v, t.freq, nowT);
                         v.gain.gain.setTargetAtTime(BASE_VOL[timbre] * t.intensity, nowT, 0.03);
+                        v.level = BASE_VOL[timbre] * t.intensity;
                         next.push(v);
                     } else if (i < targets.length) {
-                        next.push(startTone(targets[i].freq, targets[i].intensity, timbre));
+                        next.push(startTone(targets[i].freq, targets[i].intensity, timbre, nowT));
                     } else {
                         const v = active[i];
-                        if (nowT - v.lastSeen > 0.25) stopTone(v); else next.push(v);
+                        if (nowT - v.lastSeen > 0.25) stopTone(v, nowT); else next.push(v);
                     }
                 }
                 voices[timbre] = next;
@@ -789,12 +1302,327 @@
             const ph = (((stepsDone % STEPS) + STEPS) % STEPS) / STEPS;
             scanLine.style.left = (ph * 100) + '%';
             updateMelody(ph * W);
+            drawPlayhead(ph * W);
+        }
+
+        // ------------------------------------------------------------
+        // GUARDAR, ABRIR Y EXPORTAR
+        // ------------------------------------------------------------
+        const STORE_KEY = 'paintMusical.obra.v1';
+        const fileInput = document.getElementById('fileInput');
+        const exportBars = document.getElementById('exportBars');
+        const wavBtn = document.getElementById('wavBtn');
+        const mixBtn = document.getElementById('mixBtn');
+
+        function collectProject() {
+            return {
+                app: 'paint-musical',
+                version: 1,
+                strokes: strokes,
+                drums: drums,
+                tempo: tempoSelect.value,
+                scale: scaleSelect.value,
+                light: canvasLight,
+                reverb: parseInt(reverbRange.value),
+                delay: parseInt(delayRange.value),
+                mixer: getMixer()
+            };
+        }
+
+        // Guarda solo en este navegador (se recupera solo al volver a abrir la página)
+        function autosave() {
+            try { localStorage.setItem(STORE_KEY, JSON.stringify(collectProject())); } catch (err) { /* sin espacio o bloqueado */ }
+        }
+
+        function numIn(v, lo, hi, def) {
+            v = Number(v);
+            if (!isFinite(v)) return def;
+            return Math.max(lo, Math.min(hi, v));
+        }
+
+        // Valida lo que viene de un archivo antes de usarlo
+        function applyProject(p) {
+            if (!p || typeof p !== 'object') throw new Error('formato');
+            const st = [];
+            if (Array.isArray(p.strokes)) {
+                for (const s0 of p.strokes) {
+                    if (!s0 || !Object.prototype.hasOwnProperty.call(COLOR_TIMBRE, s0.color) || !Array.isArray(s0.pts)) continue;
+                    const pts = [];
+                    for (const q of s0.pts) {
+                        if (q && isFinite(Number(q.x)) && isFinite(Number(q.y))) pts.push({ x: numIn(q.x, 0, W, 0), y: numIn(q.y, 0, H, 0) });
+                    }
+                    if (pts.length) st.push({ color: s0.color, size: numIn(s0.size, 1, 25, 4), pts: pts });
+                }
+            }
+            const dr = [];
+            if (Array.isArray(p.drums)) {
+                for (const d0 of p.drums) {
+                    if (!d0 || DRUM_TYPES.indexOf(d0.type) === -1) continue;
+                    dr.push({ type: d0.type, step: Math.round(numIn(d0.step, 0, STEPS - 1, 0)), y: numIn(d0.y, 0, H, H / 2), size: numIn(d0.size, 1, 25, 4) });
+                }
+            }
+            strokes = st;
+            drums = dr;
+
+            if (p.tempo !== undefined && Array.prototype.some.call(tempoSelect.options, o => o.value == p.tempo)) {
+                tempoSelect.value = String(p.tempo);
+                tempoSelect.dispatchEvent(new Event('change'));
+            }
+            if (p.scale === 'menor' || p.scale === 'mayor') scaleSelect.value = p.scale;
+            if (p.reverb !== undefined) reverbRange.value = numIn(p.reverb, 0, 100, 25);
+            if (p.delay !== undefined) delayRange.value = numIn(p.delay, 0, 100, 15);
+            if (p.mixer && typeof p.mixer === 'object') {
+                for (const ch in mixInputs) {
+                    if (p.mixer[ch] !== undefined) mixInputs[ch].value = numIn(p.mixer[ch], 0, 150, 100);
+                }
+            }
+            if (p.light !== undefined) setTheme(!!p.light);
+            applyFx();
+            applyMixer();
+            columnsDirty = true;
+            render();
+        }
+
+        function downloadBlob(blob, name) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = name;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 3000);
+        }
+
+        function todayStr() { return new Date().toISOString().slice(0, 10); }
+
+        document.getElementById('saveBtn').addEventListener('click', () => {
+            const blob = new Blob([JSON.stringify(collectProject())], { type: 'application/json' });
+            downloadBlob(blob, 'paint-musical-' + todayStr() + '.json');
+        });
+
+        document.getElementById('openBtn').addEventListener('click', () => fileInput.click());
+
+        fileInput.addEventListener('change', () => {
+            const f = fileInput.files && fileInput.files[0];
+            if (!f) return;
+            const reader = new FileReader();
+            reader.onload = () => {
+                try {
+                    const p = JSON.parse(reader.result);
+                    beginAction();
+                    applyProject(p);
+                    endAction();
+                } catch (err) {
+                    preActionState = null;
+                    alert('No se pudo abrir el archivo: no parece una obra guardada de Paint Musical.');
+                }
+            };
+            reader.readAsText(f);
+            fileInput.value = '';
+        });
+
+        mixBtn.addEventListener('click', () => {
+            const open = document.getElementById('mixPanel').classList.toggle('open');
+            mixBtn.classList.toggle('active', open);
+        });
+
+        tempoSelect.addEventListener('change', autosave);
+        scaleSelect.addEventListener('change', autosave);
+
+        // ---- Exportar a WAV: se "toca" la obra en un contexto de audio fuera de línea ----
+        function saveAudioGlobals() {
+            return { audioCtx, masterGain, melodyBus, drumBus, chan, reverbSendMel, reverbSendDrum, delaySend,
+                     noiseBuf, satCurve, openHatChoke, voices, lastCol, offlineMode };
+        }
+        function restoreAudioGlobals(o) {
+            ({ audioCtx, masterGain, melodyBus, drumBus, chan, reverbSendMel, reverbSendDrum, delaySend,
+               noiseBuf, satCurve, openHatChoke, voices, lastCol, offlineMode } = o);
+        }
+
+        function audioBufferToWav(buf) {
+            const nCh = buf.numberOfChannels, len = buf.length, sr = buf.sampleRate;
+            const dataLen = len * nCh * 2;
+            const ab = new ArrayBuffer(44 + dataLen);
+            const dv = new DataView(ab);
+            const ws = (o, str) => { for (let i = 0; i < str.length; i++) dv.setUint8(o + i, str.charCodeAt(i)); };
+            ws(0, 'RIFF'); dv.setUint32(4, 36 + dataLen, true); ws(8, 'WAVE');
+            ws(12, 'fmt '); dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, nCh, true);
+            dv.setUint32(24, sr, true); dv.setUint32(28, sr * nCh * 2, true); dv.setUint16(32, nCh * 2, true); dv.setUint16(34, 16, true);
+            ws(36, 'data'); dv.setUint32(40, dataLen, true);
+            const chans = [];
+            for (let c = 0; c < nCh; c++) chans.push(buf.getChannelData(c));
+            let o = 44;
+            for (let i = 0; i < len; i++) {
+                for (let c = 0; c < nCh; c++) {
+                    const v = Math.max(-1, Math.min(1, chans[c][i]));
+                    dv.setInt16(o, v < 0 ? v * 0x8000 : v * 0x7FFF, true);
+                    o += 2;
+                }
+            }
+            return new Blob([ab], { type: 'audio/wav' });
+        }
+
+        let exporting = false;
+        async function exportWav() {
+            if (exporting) return;
+            const OfflineCtx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+            if (!OfflineCtx) { alert('Este navegador no permite exportar audio.'); return; }
+            exporting = true;
+            const oldText = wavBtn.textContent;
+            wavBtn.textContent = '⏳ Exportando...';
+            wavBtn.disabled = true;
+            try {
+                const bars = parseInt(exportBars.value) || 1;
+                const dur = loopDuration();
+                const stepDur = dur / STEPS;
+                const sr = 44100;
+                const tail = 2.5;   // cola extra para que la reverb y el eco no se corten
+                const off = new OfflineCtx(2, Math.ceil((bars * dur + tail) * sr), sr);
+
+                const saved = saveAudioGlobals();
+                let pending;
+                try {
+                    audioCtx = off;
+                    offlineMode = true;
+                    voices = { sine: [], triangle: [], sawtooth: [], square: [], subsine: [] };
+                    lastCol = null;
+                    openHatChoke = null;
+                    buildGraph(true);
+                    if (columnsDirty) rebuildColumns();
+
+                    for (let b = 0; b < bars; b++) {
+                        for (let st = 0; st < STEPS; st++) scheduleStep(st, (b * STEPS + st + 0.5) * stepDur);
+                    }
+                    const end = bars * dur;
+                    for (let t = 0; t < end; t += 1 / 60) updateMelody(((t / dur) % 1) * W, t);
+                    stopAllTones(end);
+                    pending = off.startRendering();
+                } finally {
+                    restoreAudioGlobals(saved);   // la reproducción en vivo no se toca
+                }
+                const rendered = await pending;
+                downloadBlob(audioBufferToWav(rendered), 'paint-musical-' + todayStr() + '.wav');
+            } catch (err) {
+                console.error(err);
+                alert('No se pudo exportar el audio.');
+            } finally {
+                wavBtn.textContent = oldText;
+                wavBtn.disabled = false;
+                exporting = false;
+            }
+        }
+        wavBtn.addEventListener('click', exportWav);
+
+        // ---- Puntos donde la línea de lectura toca el dibujo ----
+        const overlay = document.getElementById('overlay');
+        const octx = overlay.getContext('2d');
+
+        function clearOverlay() {
+            octx.setTransform(1, 0, 0, 1, 0, 0);
+            octx.clearRect(0, 0, overlay.width, overlay.height);
+        }
+
+        function drawPlayhead(x) {
+            const k = overlay.width / W;
+            octx.setTransform(k, 0, 0, k, 0, 0);
+            octx.clearRect(0, 0, W, H);
+            if (columnsDirty) rebuildColumns();
+
+            const cx = Math.max(0, Math.min(W - 1, Math.floor(x)));
+            const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 110);
+            const list = crossCols[cx];
+            if (list) {
+                for (const c of list) {
+                    const r = Math.max(3.5, c.size * 0.3 + 3);
+                    // anillo que late
+                    octx.globalAlpha = 0.6;
+                    octx.lineWidth = 2;
+                    octx.strokeStyle = c.color;
+                    octx.beginPath();
+                    octx.arc(x, c.y, r + 5 + pulse * 3, 0, Math.PI * 2);
+                    octx.stroke();
+                    // punto central
+                    octx.globalAlpha = 1;
+                    octx.shadowColor = c.color;
+                    octx.shadowBlur = 14 * k;
+                    octx.fillStyle = canvasLight ? '#14142a' : '#ffffff';
+                    octx.beginPath();
+                    octx.arc(x, c.y, r, 0, Math.PI * 2);
+                    octx.fill();
+                    octx.shadowBlur = 0;
+                }
+            }
+
+            // destello en las percusiones que la línea acaba de pasar
+            for (const d of drums) {
+                const dx = x - drumX(d);
+                if (dx >= 0 && dx < 45) {
+                    octx.globalAlpha = (1 - dx / 45) * 0.9;
+                    octx.lineWidth = 3;
+                    octx.strokeStyle = DRUM_COLOR[d.type];
+                    octx.beginPath();
+                    octx.arc(drumX(d), d.y, drumRadius(d.size) + 4 + dx * 0.5, 0, Math.PI * 2);
+                    octx.stroke();
+                }
+            }
+            octx.globalAlpha = 1;
+        }
+
+        // ---- Fondo claro / oscuro ----
+        const themeBtn = document.getElementById('themeBtn');
+        function setTheme(light) {
+            canvasLight = light;
+            document.querySelector('.canvas-container').classList.toggle('light', light);
+            render();
+        }
+        themeBtn.addEventListener('click', () => { setTheme(!canvasLight); autosave(); });
+
+        // ---- Vista previa del grosor y del color elegido ----
+        const sizeDot = document.getElementById('sizeDot');
+        function updateSizeDot() {
+            const px = parseInt(sizeRange.value) + 4;
+            sizeDot.style.width = px + 'px';
+            sizeDot.style.height = px + 'px';
+        }
+        sizeRange.addEventListener('input', updateSizeDot);
+        updateSizeDot();
+        document.querySelectorAll('.color-btn').forEach(b => b.addEventListener('click', () => {
+            sizeDot.style.background = b.dataset.color;
+            sizeDot.style.color = b.dataset.color;
+        }));
+        document.querySelectorAll('.tool-btn').forEach(b => b.addEventListener('click', () => {
+            const c = DRUM_COLOR[b.dataset.tool] || '#ffffff';
+            sizeDot.style.background = c;
+            sizeDot.style.color = c;
+        }));
+        sizeDot.style.color = '#ff4757';
+
+        // ---- Lienzo nítido en cualquier tamaño de pantalla ----
+        function resizeCanvas() {
+            const rect = canvas.getBoundingClientRect();
+            if (!rect.width) return;
+            const dpr = window.devicePixelRatio || 1;
+            const px = Math.max(500, Math.min(1600, Math.round(rect.width * dpr)));
+            if (canvas.width !== px) { canvas.width = px; canvas.height = px; }
+            if (overlay.width !== px) { overlay.width = px; overlay.height = px; }
+            render();
+        }
+        window.addEventListener('resize', resizeCanvas);
+        if (typeof ResizeObserver !== 'undefined') new ResizeObserver(resizeCanvas).observe(document.querySelector('.canvas-container'));
+
+        function loadFromStorage() {
+            try {
+                const raw = localStorage.getItem(STORE_KEY);
+                if (raw) applyProject(JSON.parse(raw));
+            } catch (err) { /* si está dañado, se empieza en blanco */ }
         }
 
         // ------------------------------------------------------------
         // ARRANQUE
         // ------------------------------------------------------------
-        render();
+        loadFromStorage();
+        resizeCanvas();
         frame();
     </script>
 </body>
